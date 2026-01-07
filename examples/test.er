@@ -1,11 +1,12 @@
-let id : {A : U} -> A -> A = \x. x;   -- elaborated to \{A} x. x
+let id : {0 A : U} -> A -> A = \x. x;   -- elaborated to \{A} x. x
 
-let 0 id2 : {A : U} -> (0 x : A) -> A = \x. x;
+let 0 id2 : {0 A : U} -> (0 x : A) -> A = \x. x;
 
--- The below panics!
 let const : {0 A B} -> A -> B -> A = \x y. x;
--- 
--- let group1 : {0 A B : U}(x y z : A) -> B -> B = \x y z b. b;
--- let group2 : {0 A B}(x y z : A) -> B -> B = \x y z b. b;
+
+let group1 : {0 A B : U}(x y z : A) -> B -> B = \x y z b. b;
+let group2 : {0 A B}(x y z : A) -> B -> B = \x y z b. b;
+
+let 0 id0 : {0 A : U} -> (0 a : A) -> A = \x. id x;
 
 id
