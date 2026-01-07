@@ -74,34 +74,37 @@ lams = go (0 :: Int)
     go x ((q, i) : is) t = Lam ("x" ++ show (x + 1)) q i $ go (x + 1) is t
 
 --       Γ      i        ?α         sp   =? rhs
-solve :: Lvl -> VarMode -> MetaVar -> Spine -> Val -> IO ()
-solve gamma Upped m sp rhs = solve gamma (AtMode Zero) m sp (coe Downward rhs)
-solve gamma Downed m sp rhs = do
+solve :: Mode -> Lvl -> VarMode -> MetaVar -> Spine -> Val -> IO ()
+solve lq gamma Upped m sp rhs = solve lq gamma (AtMode Zero) m sp (coe Downward rhs)
+solve lq gamma Downed m sp rhs = do
   throwIO MetaSolutionTooWeak
--- solve gamma (AtMode Omega) m (coeSp Upward sp) rhs
-solve gamma (AtMode q) m sp rhs = do
+solve Zero gamma (AtMode Omega) m sp rhs = do
+  throwIO MetaSolutionTooWeak -- @@TODO: can try check/prune RHS?
+solve lq gamma (AtMode q) m sp rhs = do
   pren <- invert gamma q sp
   rhs <- rename m pren rhs
   let solution = eval [] $ lams (reverse $ map (\(_, q, i) -> (q, i)) sp) rhs
   modifyIORef' mcxt $ IM.insert (unMetaVar m) (Solved q solution)
 
-unifySp :: Lvl -> Spine -> Spine -> IO ()
-unifySp l sp sp' = case (sp, sp') of
+unifySp :: Mode -> Lvl -> Spine -> Spine -> IO ()
+unifySp lq l sp sp' = case (sp, sp') of
   ([], []) -> pure ()
   -- Note: we don't have to compare Icit-s, since we know from the recursive
   -- call that sp and sp' have the same type.
-  (sp :> (t, _, _), sp' :> (t', _, _)) -> unifySp l sp sp' >> unify l t t'
+  (sp :> (t, q, _), sp' :> (t', q', _))
+    | q == q' ->
+        unifySp lq l sp sp' >> unify (mult lq q) l t t'
   _ -> throwIO UnifyError -- rigid mismatch error
 
-unify :: Lvl -> Val -> Val -> IO ()
-unify l t u = case (force t, force u) of
-  (VLam _ q _ t, VLam _ q' _ t') -> unify (l + 1) (t $$ VVar l (AtMode q)) (t' $$ VVar l (AtMode q'))
-  (t, VLam _ q i t') -> unify (l + 1) (vApp t (VVar l (AtMode q)) q i) (t' $$ VVar l (AtMode q))
-  (VLam _ q i t, t') -> unify (l + 1) (t $$ VVar l (AtMode q)) (vApp t' (VVar l (AtMode q)) q i)
+unify :: Mode -> Lvl -> Val -> Val -> IO ()
+unify lq l t u = case (force t, force u) of
+  (VLam _ q _ t, VLam _ q' _ t') -> unify lq (l + 1) (t $$ VVar l (AtMode q)) (t' $$ VVar l (AtMode q'))
+  (t, VLam _ q i t') -> unify lq (l + 1) (vApp t (VVar l (AtMode q)) q i) (t' $$ VVar l (AtMode q))
+  (VLam _ q i t, t') -> unify lq (l + 1) (t $$ VVar l (AtMode q)) (vApp t' (VVar l (AtMode q)) q i)
   (VU _, VU _) -> pure ()
-  (VPi _ x q i a b, VPi _ x' q' i' a' b') | q == q' && i == i' -> unify l a a' >> unify (l + 1) (b $$ VVar l (AtMode Zero)) (b' $$ VVar l (AtMode Zero))
-  (VRigid x _ sp, VRigid x' _ sp') | x == x' -> unifySp l sp sp'
-  (VFlex m _ sp, VFlex m' _ sp') | m == m' -> unifySp l sp sp'
-  (VFlex m q sp, t') -> solve l q m sp t'
-  (t, VFlex m' q sp') -> solve l q m' sp' t
+  (VPi _ x q i a b, VPi _ x' q' i' a' b') | q == q' && i == i' -> unify Zero l a a' >> unify Zero (l + 1) (b $$ VVar l (AtMode Zero)) (b' $$ VVar l (AtMode Zero))
+  (VRigid x _ sp, VRigid x' _ sp') | x == x' -> unifySp lq l sp sp'
+  (VFlex m _ sp, VFlex m' _ sp') | m == m' -> unifySp lq l sp sp'
+  (VFlex m q sp, t') -> solve lq l q m sp t'
+  (t, VFlex m' q sp') -> solve lq l q m' sp' t
   _ -> throwIO UnifyError -- rigid mismatch error

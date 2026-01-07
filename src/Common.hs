@@ -13,6 +13,11 @@ type Name = String
 
 data Mode = Zero | Omega deriving (Eq)
 
+mult :: Mode -> Mode -> Mode
+mult Zero _ = Zero
+mult _ Zero = Zero
+mult Omega Omega = Omega
+
 data Dir = Upward | Downward deriving (Eq, Show)
 
 data Icit = Impl | Expl deriving (Eq)

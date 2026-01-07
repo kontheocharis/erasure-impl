@@ -1,32 +1,26 @@
+let 0 Nat : U = (0 A : U) -> A -> (A -> A) -> A;
 
-let 0 Nat : U = {0 A : U} -> A -> (A -> A) -> A;
+let zero : Nat = \A z s. z;
 
-let zero : Nat = \z s. z;
-
-let succ : Nat -> Nat = \n z s. s (n z s);
+let succ : Nat -> Nat = \n A z s. s (n A z s);
 
 let 0 Fin : Nat -> U
-  = \n . {0 A : Nat -> U}
+  = \n . (0 A : Nat -> U)
     -> ({0 k : Nat} -> A (succ k))
     -> ({0 k : Nat} -> A k -> A (succ k))
     -> A n;
   
 let fzero : {0 k : Nat} -> Fin (succ k)
-= \fz fs. fz;
+  = \A fz fs. fz;
 
--- let foo : (0 bang : Nat -> Nat) -> Nat -> Nat = _;
+let foo : (0 bang : Nat -> Nat) -> Nat -> Nat = \bang n. _;
 
--- let bar : (0 bang : Nat -> Nat) -> (n : Nat) -> Fin (foo bang n)
--- = fzero {k = bang n};
+-- Here we are trying to solve the hole in foo with bang n,
+-- which shouldn't be allowed since bang is erased.
 
+-- Idris wrongly allows this: https://github.com/idris-lang/Idris2/issues/3680
 
-fzero
+let bar : (0 bang : Nat -> Nat) -> (n : Nat) -> Fin (foo bang n)
+   = \bang n. fzero {k = bang n};
 
--- let foo : (0 bang : Nat -> Nat) -> Nat -> Nat
--- foo bang = ?
--- 
--- bar : (0 bang : Nat -> Nat) -> (n : Nat) -> Fin (foo bang n)
--- bar bang n = FZ {k = bang n}
--- 
--- main : IO ()
--- main = putStrLn $ show $ foo (\x => x) 3
+foo

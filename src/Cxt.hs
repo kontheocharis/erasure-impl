@@ -21,7 +21,7 @@ data Cxt = Cxt
     types :: Types, -- raw name lookup, pretty printing
     bds :: [BD], -- fresh meta creation
     pos :: SourcePos, -- error reporting
-    md :: Mode -- elaboration mode
+    md :: Mode -- elaboration mode. Zero means erasure marker is present, Omega means absent
   }
 
 cxtNames :: Cxt -> [Name]
@@ -61,4 +61,4 @@ closeVal cxt t m = Closure (env cxt) (quote (lvl cxt + 1) t) m
 
 -- | closeVal : (Γ : Con) → Val (Γ, x : A) B → Closure Γ A B
 enter :: Cxt -> Mode -> Cxt
-enter (Cxt env l types bds pos md) md' = Cxt env l types bds pos md'
+enter (Cxt env l types bds pos md) md' = Cxt env l types bds pos (mult md md')

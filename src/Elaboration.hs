@@ -33,7 +33,7 @@ freshMeta cxt q = do
 
 unifyCatch :: Cxt -> Val -> Val -> IO ()
 unifyCatch cxt t t' =
-  unify (lvl cxt) t t'
+  unify (md cxt) (lvl cxt) t t'
     `catch` \e -> throwIO $ Error cxt $ CantUnify (quote (lvl cxt) t) (quote (lvl cxt) t') e
 
 -- | Insert fresh implicit applications.
