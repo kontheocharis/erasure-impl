@@ -28,7 +28,6 @@ freshMeta cxt q = do
         (Omega, Omega) -> AtMode Omega
   let actual = varModeOriginalMode metaMd
   modifyIORef' mcxt $ IM.insert m (Unsolved actual)
-  -- @@TODO: When do we promote metas from Zero to Omega?
   pure $ wrapMode metaMd (\q' -> InsertedMeta (MetaVar m) q' (bds cxt))
 
 unifyCatch :: Cxt -> Val -> Val -> IO ()
@@ -73,6 +72,8 @@ insertUntilName cxt name act = go =<< act
         throwIO $ Error cxt $ NoNamedImplicitArg name
 
 -- Mode given as argument
+--
+-- types always in mode 0
 checkIn :: Cxt -> Mode -> P.Tm -> VTy -> IO Tm
 checkIn cxt Zero t a = do
   -- shallow check for mode 0
@@ -83,6 +84,8 @@ checkIn cxt Zero t a = do
 checkIn cxt Omega t a = check cxt t a
 
 -- Mode ω
+--
+-- types always in mode 0
 check :: Cxt -> P.Tm -> VTy -> IO Tm
 check cxt t a = case (t, force a) of
   (P.SrcPos pos t, a) ->
@@ -118,9 +121,7 @@ inferIn cxt Omega t = infer cxt t
 
 -- Mode ω
 --
--- @@TODO: all metas here are instantiated at mode Omega for now
--- this might not be what we want..
---
+-- types always in mode 0
 infer :: Cxt -> P.Tm -> IO (Tm, VTy)
 infer cxt = \case
   P.SrcPos pos t ->
@@ -174,7 +175,7 @@ infer cxt = \case
         pure (q, a, b)
 
     u <- checkIn cxt q u a
-    pure (App t u q i, b $$ eval (env cxt) u)
+    pure (App t u q i, b $$ eval (env cxt) (wrapMode (diffVarMode q Zero) (\_ -> u)))
   P.U -> do
     when (md cxt /= Zero) (throwIO $ Error cxt $ InsufficientMode)
     pure (Up U, VU NotUpped)

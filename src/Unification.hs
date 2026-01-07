@@ -76,10 +76,9 @@ lams = go (0 :: Int)
 --       Γ      i        ?α         sp   =? rhs
 solve :: Mode -> Lvl -> VarMode -> MetaVar -> Spine -> Val -> IO ()
 solve lq gamma Upped m sp rhs = solve lq gamma (AtMode Zero) m sp (coe Downward rhs)
-solve lq gamma Downed m sp rhs = do
-  throwIO MetaSolutionTooWeak
+solve lq gamma Downed m sp rhs = solve lq gamma (AtMode Omega) m sp (coe Upward rhs) -- this will lead to the case below
 solve Zero gamma (AtMode Omega) m sp rhs = do
-  throwIO MetaSolutionTooWeak -- @@TODO: can try check/prune RHS?
+  throwIO MetaSolutionTooWeak -- @@TODO: can try check/prune RHS? Or otherwise promote metas
 solve lq gamma (AtMode q) m sp rhs = do
   pren <- invert gamma q sp
   rhs <- rename m pren rhs

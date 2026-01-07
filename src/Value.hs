@@ -13,13 +13,15 @@ type Env = [Val]
 -- `Zero` (because we are in an erased context).
 --
 -- If `Downed`, the variable is used at mode `Zero` but declared at mode
--- `Omega` (because we are in a non-erased context).
+-- `Omega`
 data VarMode = AtMode Mode | Upped | Downed
   deriving (Show)
 
 type Spine = [(Val, Mode, Icit)]
 
 data Closure = Closure Env Tm VarMode
+  -- the `VarMode` indicates how the bound variable is used in the closure; the
+  -- reverse operation must be applied when instantiating
   deriving (Show)
 
 data IsUpped = YesUpped | NotUpped
@@ -39,10 +41,10 @@ type VTy = Val
 
 data Val
   = VFlex MetaVar VarMode Spine
-  | VRigid Lvl VarMode Spine -- default in its declared mode
-  | VLam Name Mode Icit {-# UNPACK #-} Closure -- default in mode ω
-  | VPi IsUpped Name Mode Icit ~VTy {-# UNPACK #-} Closure -- always in mode 0
-  | VU IsUpped -- always in mode 0
+  | VRigid Lvl VarMode Spine
+  | VLam Name Mode Icit {-# UNPACK #-} Closure
+  | VPi IsUpped Name Mode Icit ~VTy {-# UNPACK #-} Closure
+  | VU IsUpped
   deriving (Show)
 
 pattern VVar :: Lvl -> VarMode -> Val
