@@ -1,23 +1,25 @@
-
 module Value where
 
 import Common
 import Syntax
 
-type Env     = [Val]
-type Spine   = [(Val, Icit)]
+type Env = [Val]
+
+type Spine = [(Val, Mode, Icit)]
+
 data Closure = Closure Env Tm
-type VTy     = Val
+
+type VTy = Val
 
 data Val
   = VFlex MetaVar Spine
-  | VRigid Lvl Spine
-  | VLam Name Icit {-# unpack #-} Closure
-  | VPi Name Icit ~VTy {-# unpack #-} Closure
+  | VRigid Lvl Mode Spine
+  | VLam Name Mode Icit {-# UNPACK #-} Closure
+  | VPi Name Mode Icit ~VTy {-# UNPACK #-} Closure
   | VU
 
-pattern VVar :: Lvl -> Val
-pattern VVar x = VRigid x []
+pattern VVar :: Lvl -> Mode -> Val
+pattern VVar x m = VRigid x m []
 
 pattern VMeta :: MetaVar -> Val
 pattern VMeta m = VFlex m []

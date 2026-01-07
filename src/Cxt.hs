@@ -1,4 +1,3 @@
-
 module Cxt where
 
 import Common
@@ -10,20 +9,22 @@ import Value
 -- Elaboration context
 --------------------------------------------------------------------------------
 
-data NameOrigin = Inserted | Source deriving Eq
-type Types = [(String, NameOrigin, VTy)]
+data NameOrigin = Inserted | Source deriving (Eq)
 
-data Cxt = Cxt {           -- used for:
-                           -----------------------------------
-    env   :: Env           -- evaluation
-  , lvl   :: Lvl           -- unification
-  , types :: Types         -- raw name lookup, pretty printing
-  , bds   :: [BD]          -- fresh meta creation
-  , pos   :: SourcePos     -- error reporting
+type Types = [(String, NameOrigin, Mode, VTy)]
+
+data Cxt = Cxt
+  { -- used for:
+    -----------------------------------
+    env :: Env, -- evaluation
+    lvl :: Lvl, -- unification
+    types :: Types, -- raw name lookup, pretty printing
+    bds :: [BD], -- fresh meta creation
+    pos :: SourcePos -- error reporting
   }
 
 cxtNames :: Cxt -> [Name]
-cxtNames = fmap (\(x, _, _) -> x) . types
+cxtNames = fmap (\(x, _, _, _) -> x) . types
 
 showVal :: Cxt -> Val -> String
 showVal cxt v =
@@ -39,19 +40,19 @@ emptyCxt :: SourcePos -> Cxt
 emptyCxt = Cxt [] 0 [] []
 
 -- | Extend Cxt with a bound variable.
-bind :: Cxt -> Name -> VTy -> Cxt
-bind (Cxt env l types bds pos) x ~a =
-  Cxt (env :> VVar l) (l + 1) (types :> (x, Source, a)) (bds :> Bound) pos
+bind :: Cxt -> Name -> Mode -> VTy -> Cxt
+bind (Cxt env l types bds pos) x q ~a =
+  Cxt (env :> VVar l q) (l + 1) (types :> (x, Source, q, a)) (bds :> Bound) pos
 
 -- | Insert a new binding.
-newBinder :: Cxt -> Name -> VTy -> Cxt
-newBinder (Cxt env l types bds pos) x ~a =
-  Cxt (env :> VVar l) (l + 1) (types :> (x, Inserted, a)) (bds :> Bound) pos
+newBinder :: Cxt -> Name -> Mode -> VTy -> Cxt
+newBinder (Cxt env l types bds pos) x q ~a =
+  Cxt (env :> VVar l q) (l + 1) (types :> (x, Inserted, q, a)) (bds :> Bound) pos
 
 -- | Extend Cxt with a definition.
-define :: Cxt -> Name -> Val -> VTy -> Cxt
-define (Cxt env l types bds pos) x ~t ~a  =
-  Cxt (env :> t) (l + 1) (types :> (x, Source, a)) (bds :> Defined) pos
+define :: Cxt -> Name -> Mode -> Val -> VTy -> Cxt
+define (Cxt env l types bds pos) x q ~t ~a =
+  Cxt (env :> t) (l + 1) (types :> (x, Source, q, a)) (bds :> Defined) pos
 
 -- | closeVal : (Γ : Con) → Val (Γ, x : A) B → Closure Γ A B
 closeVal :: Cxt -> Val -> Closure

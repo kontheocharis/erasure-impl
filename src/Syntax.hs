@@ -1,4 +1,3 @@
-
 module Syntax where
 
 import Common
@@ -6,12 +5,12 @@ import Common
 type Ty = Tm
 
 data Tm
-  = Var Ix
-  | Lam Name Icit Tm
-  | App Tm Tm Icit
+  = Var Ix Mode
+  | Lam Name Mode Icit Tm
+  | App Tm Tm Mode Icit
   | U
-  | Pi Name Icit Ty Ty
-  | Let Name Ty Tm Tm
+  | Pi Name Mode Icit Ty Ty
+  | Let Name Mode Ty Tm Tm
   | Meta MetaVar
   | InsertedMeta MetaVar [BD]
-  deriving Show
+  deriving (Show)
