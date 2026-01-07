@@ -12,7 +12,7 @@ data Tm
   | Pi Name Mode Icit Ty Ty
   | Let Name Mode Ty Tm Tm
   | Meta MetaVar Mode
-  | InsertedMeta MetaVar [BD]
+  | InsertedMeta MetaVar Mode [BD]
   | Up Tm
   | Down Tm
   deriving (Show)

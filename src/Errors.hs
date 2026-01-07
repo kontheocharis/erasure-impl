@@ -8,12 +8,12 @@ import Text.Printf
 
 --------------------------------------------------------------------------------
 
-data UnifyError = UnifyError
+data UnifyError = UnifyError | MetaSolutionTooWeak
   deriving (Show, Exception)
 
 data ElabError
   = NameNotInScope Name
-  | CantUnify Tm Tm
+  | CantUnify Tm Tm UnifyError
   | InferNamedLam
   | NoNamedImplicitArg Name
   | IcitMismatch Icit Icit
@@ -31,7 +31,7 @@ displayError file (Error cxt e) = do
       msg = case e of
         NameNotInScope x ->
           "Name not in scope: " ++ x
-        CantUnify t t' ->
+        CantUnify t t' ue ->
           ( "Cannot unify expected type\n\n"
               ++ "  "
               ++ showTm cxt t
@@ -39,6 +39,9 @@ displayError file (Error cxt e) = do
               ++ "with inferred type\n\n"
               ++ "  "
               ++ showTm cxt t'
+              ++ case ue of
+                UnifyError -> ""
+                MetaSolutionTooWeak -> " (meta solution too weak)."
           )
         InferNamedLam ->
           "Cannot infer type for lambda with named argument"

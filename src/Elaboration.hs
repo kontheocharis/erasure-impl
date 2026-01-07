@@ -21,18 +21,20 @@ freshMeta :: Cxt -> Mode -> IO Tm
 freshMeta cxt q = do
   m <- readIORef nextMeta
   writeIORef nextMeta (m + 1)
-  modifyIORef' mcxt $ IM.insert m (Unsolved q)
-  -- @@TODO: We need to decide what to do here... if md ctx is Zero,
-  -- should we create a meta at mode Zero? Or should we make the meta
-  -- as restricted as possible? In that case shouldn't it always be Omega?
-  -- When do we promote metas from Zero to Omega?
-  pure $ InsertedMeta (MetaVar m) (bds cxt)
+  let metaMd = case (md cxt, q) of
+        (Zero, Omega) -> Upped
+        (Omega, Zero) -> AtMode Zero
+        (Zero, Zero) -> AtMode Zero
+        (Omega, Omega) -> AtMode Omega
+  let actual = varModeOriginalMode metaMd
+  modifyIORef' mcxt $ IM.insert m (Unsolved actual)
+  -- @@TODO: When do we promote metas from Zero to Omega?
+  pure $ wrapMode metaMd (\q' -> InsertedMeta (MetaVar m) q' (bds cxt))
 
 unifyCatch :: Cxt -> Val -> Val -> IO ()
 unifyCatch cxt t t' =
   unify (lvl cxt) t t'
-    `catch` \UnifyError ->
-      throwIO $ Error cxt $ CantUnify (quote (lvl cxt) t) (quote (lvl cxt) t')
+    `catch` \e -> throwIO $ Error cxt $ CantUnify (quote (lvl cxt) t) (quote (lvl cxt) t') e
 
 -- | Insert fresh implicit applications.
 insert' :: Cxt -> IO (Tm, VTy) -> IO (Tm, VTy)

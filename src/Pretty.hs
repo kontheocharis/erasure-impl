@@ -83,7 +83,7 @@ prettyTm prec = go prec
             . (";\n\n" ++)
             . go letp (ns :> x) u
       Meta m _ -> (("?" ++ show m) ++)
-      InsertedMeta m bds -> goBDS p ns m bds
+      InsertedMeta m _ bds -> goBDS p ns m bds
       Up t -> ("↑ " ++) . go atomp ns t
       Down t -> ("↓ " ++) . go atomp ns t
 

@@ -20,24 +20,26 @@ data PartialRenaming = PRen
     -- | size of Δ
     cod :: Lvl,
     -- | mapping from Δ vars to Γ vars
-    ren :: IM.IntMap Lvl
+    ren :: IM.IntMap (Lvl, VarMode)
   }
 
 -- | Lifting a partial renaming over an extra bound variable.
 --   Given (σ : PRen Γ Δ), (lift σ : PRen (Γ, x : A[σ]) (Δ, x : A))
-lift :: PartialRenaming -> PartialRenaming
-lift (PRen dom cod ren) =
-  PRen (dom + 1) (cod + 1) (IM.insert (unLvl cod) dom ren)
+lift :: VarMode -> PartialRenaming -> PartialRenaming
+lift q (PRen dom cod ren) =
+  PRen (dom + 1) (cod + 1) (IM.insert (unLvl cod) (dom, q) ren)
 
 -- | @invert : (Γ : Cxt) → (spine : Sub Δ Γ) → PRen Γ Δ@
-invert :: Lvl -> Spine -> IO PartialRenaming
-invert gamma sp = do
-  let go :: Spine -> IO (Lvl, IM.IntMap Lvl)
+invert :: Lvl -> Mode -> Spine -> IO PartialRenaming
+invert gamma q sp = do
+  let go :: Spine -> IO (Lvl, IM.IntMap (Lvl, VarMode))
       go [] = pure (0, mempty)
       go (sp :> (t, _, _)) = do
         (dom, ren) <- go sp
         case force t of
-          VVar (Lvl x) _ | IM.notMember x ren -> pure (dom + 1, IM.insert x dom ren)
+          VVar (Lvl x) q' | IM.notMember x ren -> case invertVarMode q' q of
+            Just q'inv -> pure (dom + 1, IM.insert x (dom, q'inv) ren)
+            Nothing -> throwIO UnifyError
           _ -> throwIO UnifyError
 
   (dom, ren) <- go sp
@@ -58,9 +60,9 @@ rename m pren v = go pren v
         | otherwise -> goSp pren (wrapMode q (Meta m')) sp
       VRigid (Lvl x) q sp -> case IM.lookup x (ren pren) of
         Nothing -> throwIO UnifyError -- scope error ("escaping variable" error)
-        Just x' -> goSp pren (wrapMode q (Var (lvl2Ix (dom pren) x'))) sp
-      VLam x q i t -> Lam x q i <$> go (lift pren) (t $$ VVar (cod pren) (AtMode q))
-      VPi x q i a b -> Pi x q i <$> go pren a <*> go (lift pren) (b $$ VVar (cod pren) (AtMode q))
+        Just (x', q') -> goSp pren (wrapMode (substVarMode q q') (Var (lvl2Ix (dom pren) x'))) sp
+      VLam x q i t -> Lam x q i <$> go (lift (AtMode q) pren) (t $$ VVar (cod pren) (AtMode q))
+      VPi x q i a b -> Pi x q i <$> go pren a <*> go (lift (AtMode Zero) pren) (b $$ VVar (cod pren) (AtMode Zero))
       VU -> pure U
 
 -- | Wrap a term in lambdas. We need an extra list of Icit-s to
@@ -73,11 +75,15 @@ lams = go (0 :: Int)
 
 --       Γ      i        ?α         sp   =? rhs
 solve :: Lvl -> VarMode -> MetaVar -> Spine -> Val -> IO ()
-solve gamma q m sp rhs = do
-  pren <- invert gamma sp
+solve gamma Upped m sp rhs = solve gamma (AtMode Zero) m (coeSp Downward sp) rhs
+solve gamma Downed m sp rhs = do
+  throwIO MetaSolutionTooWeak
+-- solve gamma (AtMode Omega) m (coeSp Upward sp) rhs
+solve gamma (AtMode q) m sp rhs = do
+  pren <- invert gamma q sp
   rhs <- rename m pren rhs
   let solution = eval [] $ lams (reverse $ map (\(_, q, i) -> (q, i)) sp) rhs
-  modifyIORef' mcxt $ IM.insert (unMetaVar m) (Solved Zero solution) -- @@TODO!
+  modifyIORef' mcxt $ IM.insert (unMetaVar m) (Solved q solution)
 
 unifySp :: Lvl -> Spine -> Spine -> IO ()
 unifySp l sp sp' = case (sp, sp') of

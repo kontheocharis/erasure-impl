@@ -57,3 +57,22 @@ wrapMode :: VarMode -> (Mode -> Tm) -> Tm
 wrapMode (AtMode m) f = f m
 wrapMode Upped f = Up (f Zero)
 wrapMode Downed f = Down (f Omega)
+
+invertVarMode :: VarMode -> Mode -> Maybe VarMode
+invertVarMode (AtMode m) _ = Just $ AtMode m
+invertVarMode Upped _ = Just $ Downed
+invertVarMode Downed Zero = Just $ Upped
+invertVarMode Downed _ = Nothing
+
+-- Perform substitution: x@vq[x ↦ z@vq']
+substVarMode :: VarMode -> VarMode -> VarMode
+substVarMode (AtMode _) q = q
+substVarMode q (AtMode _) = q
+substVarMode Upped Downed = AtMode Omega
+substVarMode Downed Upped = AtMode Zero
+substVarMode q1 q2 = error "impossible"
+
+varModeOriginalMode :: VarMode -> Mode
+varModeOriginalMode (AtMode m) = m
+varModeOriginalMode Upped = Zero
+varModeOriginalMode Downed = Omega
