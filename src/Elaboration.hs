@@ -68,7 +68,12 @@ insertUntilName cxt name act = go =<< act
 
 -- Mode given as argument
 checkIn :: Cxt -> Mode -> P.Tm -> VTy -> IO Tm
-checkIn cxt Zero t a = Down <$> check (enter cxt Zero) t a
+checkIn cxt Zero t a = do
+  -- shallow check for mode 0
+  t' <- check (enter cxt Zero) t a
+  case t' of
+    Up t'' -> pure t''
+    _ -> pure $ Down t'
 checkIn cxt Omega t a = check cxt t a
 
 -- Mode ω
@@ -86,7 +91,7 @@ check cxt t a = case (t, force a) of
   (P.Let x q a t u, a') -> do
     a <- checkIn cxt Zero a VU
     let ~va = eval (env cxt) a
-    t <- check cxt t va
+    t <- checkIn cxt q t va
     let ~vt = eval (env cxt) t
     u <- check (define cxt x q vt va) u a'
     pure (Let x q a t u)
@@ -152,16 +157,18 @@ infer cxt = \case
 
     u <- checkIn cxt q u a
     pure (App t u q i, b $$ eval (env cxt) u)
-  P.U ->
-    pure (U, VU)
+  P.U -> do
+    when (md cxt /= Zero) (throwIO $ Error cxt $ InsufficientMode)
+    pure (Up U, VU)
   P.Pi x q i a b -> do
-    a <- check cxt a VU
-    b <- check (bind cxt x Zero (eval (env cxt) a)) b VU
-    pure (Pi x q i a b, VU)
+    when (md cxt /= Zero) (throwIO $ Error cxt $ InsufficientMode)
+    a <- checkIn cxt Zero a VU
+    b <- checkIn (bind cxt x Zero (eval (env cxt) a)) Zero b VU
+    pure (Up (Pi x q i a b), VU)
   P.Let x q a t u -> do
     a <- checkIn cxt Zero a VU
     let ~va = eval (env cxt) a
-    t <- check cxt t va
+    t <- checkIn cxt q t va
     let ~vt = eval (env cxt) t
     (u, b) <- infer (define cxt x q vt va) u
     pure (Let x q a t u, b)
