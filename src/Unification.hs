@@ -62,8 +62,8 @@ rename m pren v = go pren v
         Nothing -> throwIO UnifyError -- scope error ("escaping variable" error)
         Just (x', q') -> goSp pren (wrapMode (substVarMode q q') (Var (lvl2Ix (dom pren) x'))) sp
       VLam x q i t -> Lam x q i <$> go (lift (AtMode q) pren) (t $$ VVar (cod pren) (AtMode q))
-      VPi x q i a b -> Pi x q i <$> go pren a <*> go (lift (AtMode Zero) pren) (b $$ VVar (cod pren) (AtMode Zero))
-      VU -> pure U
+      VPi iu x q i a b -> wrapIsUpped iu <$> (Pi x q i <$> go pren a <*> go (lift (AtMode Zero) pren) (b $$ VVar (cod pren) (AtMode Zero)))
+      VU iu -> pure $ wrapIsUpped iu U
 
 -- | Wrap a term in lambdas. We need an extra list of Icit-s to
 --   match the type of the to-be-solved meta.
@@ -98,8 +98,8 @@ unify l t u = case (force t, force u) of
   (VLam _ q _ t, VLam _ q' _ t') -> unify (l + 1) (t $$ VVar l (AtMode q)) (t' $$ VVar l (AtMode q'))
   (t, VLam _ q i t') -> unify (l + 1) (vApp t (VVar l (AtMode q)) q i) (t' $$ VVar l (AtMode q))
   (VLam _ q i t, t') -> unify (l + 1) (t $$ VVar l (AtMode q)) (vApp t' (VVar l (AtMode q)) q i)
-  (VU, VU) -> pure ()
-  (VPi x q i a b, VPi x' q' i' a' b') | q == q' && i == i' -> unify l a a' >> unify (l + 1) (b $$ VVar l (AtMode Zero)) (b' $$ VVar l (AtMode Zero))
+  (VU _, VU _) -> pure ()
+  (VPi _ x q i a b, VPi _ x' q' i' a' b') | q == q' && i == i' -> unify l a a' >> unify (l + 1) (b $$ VVar l (AtMode Zero)) (b' $$ VVar l (AtMode Zero))
   (VRigid x _ sp, VRigid x' _ sp') | x == x' -> unifySp l sp sp'
   (VFlex m _ sp, VFlex m' _ sp') | m == m' -> unifySp l sp sp'
   (VFlex m q sp, t') -> solve l q m sp t'

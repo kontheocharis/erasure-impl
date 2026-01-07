@@ -19,8 +19,21 @@ data VarMode = AtMode Mode | Upped | Downed
 
 type Spine = [(Val, Mode, Icit)]
 
-data Closure = Closure Env Tm
+data Closure = Closure Env Tm VarMode
   deriving (Show)
+
+data IsUpped = YesUpped | NotUpped
+  deriving (Eq, Show)
+
+moveIsUpped :: Dir -> IsUpped -> IsUpped
+moveIsUpped Upward NotUpped = YesUpped
+moveIsUpped Upward YesUpped = error "impossible"
+moveIsUpped Downward YesUpped = NotUpped
+moveIsUpped Downward NotUpped = error "impossible"
+
+wrapIsUpped :: IsUpped -> Tm -> Tm
+wrapIsUpped NotUpped t = t
+wrapIsUpped YesUpped t = Up t
 
 type VTy = Val
 
@@ -28,8 +41,8 @@ data Val
   = VFlex MetaVar VarMode Spine
   | VRigid Lvl VarMode Spine -- default in its declared mode
   | VLam Name Mode Icit {-# UNPACK #-} Closure -- default in mode ω
-  | VPi Name Mode Icit ~VTy {-# UNPACK #-} Closure -- always in mode 0
-  | VU -- always in mode 0
+  | VPi IsUpped Name Mode Icit ~VTy {-# UNPACK #-} Closure -- always in mode 0
+  | VU IsUpped -- always in mode 0
   deriving (Show)
 
 pattern VVar :: Lvl -> VarMode -> Val

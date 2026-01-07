@@ -1,51 +1,56 @@
-
 module Main where
 
-import Control.Exception
-import System.Environment
-import System.Exit
-
 import Common
+import Control.Exception
 import Cxt
+import Elaboration
 import Errors
 import Evaluation
 import Metacontext
 import Parser
-import Pretty
-import Elaboration
-
 import qualified Presyntax as P
+import Pretty
+import System.Environment
+import System.Exit
 
 --------------------------------------------------------------------------------
 
-helpMsg = unlines [
-  "usage: erasure-impl [--help|elab|nf|type]",
-  "  --help : display this message",
-  "  elab   : read & elaborate expression from stdin",
-  "  nf     : read & typecheck expression from stdin, print its normal form and type",
-  "  type   : read & typecheck expression from stdin, print its type"]
+helpMsg =
+  unlines
+    [ "usage: erasure-impl [--help|elab|nf|type]",
+      "  --help : display this message",
+      "  elab   : read & elaborate expression from stdin",
+      "  nf     : read & typecheck expression from stdin, print its normal form and type",
+      "  type   : read & typecheck expression from stdin, print its type"
+    ]
 
 mainWith :: IO [String] -> IO (P.Tm, String) -> IO ()
 mainWith getOpt getRaw = do
-
-  let elab = do
+  let elab m = do
         (t, file) <- getRaw
-        infer (emptyCxt (initialPos file)) t
+        inferIn (emptyCxt (initialPos file)) m t
           `catch` \e -> displayError file e >> exitSuccess
+
+  let parseMode "0" = pure Zero
+      parseMode "" = pure Omega
+      parseMode _ = putStrLn helpMsg >> exitFailure
 
   reset
   getOpt >>= \case
     ["--help"] -> putStrLn helpMsg
-    ["nf"]   -> do
-      (t, a) <- elab
+    ['n' : 'f' : optMode] -> do
+      q <- parseMode optMode
+      (t, a) <- elab q
       putStrLn $ showTm0 $ nf [] t
       putStrLn "  :"
       putStrLn $ showTm0 $ quote 0 a
-    ["type"] -> do
-      (t, a) <- elab
+    ['t' : 'y' : 'p' : 'e' : optMode] -> do
+      q <- parseMode optMode
+      (t, a) <- elab q
       putStrLn $ showTm0 $ quote 0 a
-    ["elab"] -> do
-      (t, a) <- elab
+    ['e' : 'l' : 'a' : 'b' : optMode] -> do
+      q <- parseMode optMode
+      (t, a) <- elab q
       displayMetas
       putStrLn $ showTm0 t
     _ -> putStrLn helpMsg

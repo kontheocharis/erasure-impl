@@ -56,8 +56,8 @@ define (Cxt env l types bds pos md) x q ~t ~a =
   Cxt (env :> t) (l + 1) (types :> (x, Source, q, a)) (bds :> Defined) pos md
 
 -- | closeVal : (Γ : Con) → Val (Γ, x : A) B → Closure Γ A B
-closeVal :: Cxt -> Val -> Closure
-closeVal cxt t = Closure (env cxt) (quote (lvl cxt + 1) t)
+closeVal :: Cxt -> Val -> VarMode -> Closure
+closeVal cxt t m = Closure (env cxt) (quote (lvl cxt + 1) t) m
 
 -- | closeVal : (Γ : Con) → Val (Γ, x : A) B → Closure Γ A B
 enter :: Cxt -> Mode -> Cxt
