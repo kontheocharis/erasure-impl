@@ -24,7 +24,7 @@ data PartialRenaming = PRen
   }
 
 -- | Lifting a partial renaming over an extra bound variable.
---   Given (σ : PRen Γ Δ), (lift σ : PRen (Γ, x : A[σ]) (Δ, x : A))
+--   Given (σ : PRen Γ Δ), (lift σ : PRen (Γ, x {i}: A[σ]) (Δ, x {i}: A))
 lift :: VarMode -> PartialRenaming -> PartialRenaming
 lift q (PRen dom cod ren) =
   PRen (dom + 1) (cod + 1) (IM.insert (unLvl cod) (dom, q) ren)

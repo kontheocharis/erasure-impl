@@ -30,7 +30,7 @@ mainWith getOpt getRaw = do
   let elab m = do
         (t, file) <- getRaw
         inferIn (emptyCxt (initialPos file)) m t
-          `catch` \e -> displayError file e >> exitSuccess
+          `catch` \e -> displayError file e >> exitFailure
 
   let parseMode "0" = pure Zero
       parseMode "" = pure Omega

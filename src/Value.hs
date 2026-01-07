@@ -24,18 +24,10 @@ data Closure = Closure Env Tm VarMode
   -- reverse operation must be applied when instantiating
   deriving (Show)
 
+-- Whether an erased-only value is wrapped in Up
+-- In the basic setting, this applies to types
 data IsUpped = YesUpped | NotUpped
   deriving (Eq, Show)
-
-moveIsUpped :: Dir -> IsUpped -> IsUpped
-moveIsUpped Upward NotUpped = YesUpped
-moveIsUpped Upward YesUpped = error "impossible"
-moveIsUpped Downward YesUpped = NotUpped
-moveIsUpped Downward NotUpped = error "impossible"
-
-wrapIsUpped :: IsUpped -> Tm -> Tm
-wrapIsUpped NotUpped t = t
-wrapIsUpped YesUpped t = Up t
 
 type VTy = Val
 
@@ -53,6 +45,19 @@ pattern VVar x q = VRigid x q []
 pattern VMeta :: MetaVar -> VarMode -> Val
 pattern VMeta m q = VFlex m q []
 
+-- Move an IsUpped in a given direction, if possible
+moveIsUpped :: Dir -> IsUpped -> IsUpped
+moveIsUpped Upward NotUpped = YesUpped
+moveIsUpped Upward YesUpped = error "impossible"
+moveIsUpped Downward YesUpped = NotUpped
+moveIsUpped Downward NotUpped = error "impossible"
+
+-- Wrap a type in Up/Down if needed
+wrapIsUpped :: IsUpped -> Tm -> Tm
+wrapIsUpped NotUpped t = t
+wrapIsUpped YesUpped t = Up t
+
+-- Move a VarMode in a given direction, if possible
 moveVarMode :: Dir -> VarMode -> VarMode
 moveVarMode Upward (AtMode Zero) = Upped
 moveVarMode Upward (AtMode Omega) = error "impossible"
@@ -63,11 +68,13 @@ moveVarMode Downward (AtMode Zero) = error "impossible"
 moveVarMode Downward Downed = error "impossible"
 moveVarMode Downward Upped = AtMode Zero
 
+-- The difference between two modes as a VarMode
 diffVarMode :: Mode -> Mode -> VarMode
 diffVarMode Omega Zero = Downed
 diffVarMode Zero Omega = Upped
 diffVarMode m _ = AtMode m
 
+-- Wrap a term in the coercion corresponding to the VarMode
 wrapMode :: VarMode -> (Mode -> Tm) -> Tm
 wrapMode (AtMode m) f = f m
 wrapMode Upped f = Up (f Zero)
@@ -87,6 +94,7 @@ substVarMode Upped Downed = AtMode Omega
 substVarMode Downed Upped = AtMode Zero
 substVarMode q1 q2 = error "impossible"
 
+-- The mode of a variable before any coercion is applied
 varModeOriginalMode :: VarMode -> Mode
 varModeOriginalMode (AtMode m) = m
 varModeOriginalMode Upped = Zero
