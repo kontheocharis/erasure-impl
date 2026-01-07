@@ -34,9 +34,15 @@ dependencies:
   - containers
   - megaparsec
 
-source-dirs: src
-
-executable:
-  main: Main.hs
-  ghc-options:
-    - -O
+executables:
+  explicit:
+    main: Main.hs
+    source-dirs: explicit
+    ghc-options:
+      - -O
+  
+  implicit:
+    main: Main.hs
+    source-dirs: implicit
+    ghc-options:
+      - -O
