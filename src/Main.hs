@@ -6,6 +6,7 @@ import Cxt
 import Elaboration
 import Errors
 import Evaluation
+import Extraction (extract)
 import Metacontext
 import Parser
 import qualified Presyntax as P
@@ -53,6 +54,11 @@ mainWith getOpt getRaw = do
       (t, a) <- elab q
       displayMetas
       putStrLn $ showTm0 t
+    ['e' : 'x' : optMode] -> do
+      q <- parseMode optMode
+      (t, a) <- elab q
+      let e = extract [] t
+      putStrLn $ showCode0 e
     _ -> putStrLn helpMsg
 
 main :: IO ()

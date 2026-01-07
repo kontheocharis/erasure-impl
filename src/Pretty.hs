@@ -1,5 +1,6 @@
-module Pretty (prettyTm, showTm0, displayMetas) where
+module Pretty (prettyTm, showTm0, showCode0, displayMetas) where
 
+import Code (Code (..))
 import Common
 import Control.Monad
 import Data.IORef
@@ -97,3 +98,28 @@ displayMetas = do
     Unsolved q -> printf "let %s ?%s = ?;\n" (show q) (show m)
     Solved q v -> printf "let %s ?%s = %s;\n" (show q) (show m) (showTm0 $ quote 0 v)
   putStrLn ""
+
+prettyCode :: Int -> [Name] -> Code -> ShowS
+prettyCode prec = go prec
+  where
+    go :: Int -> [Name] -> Code -> ShowS
+    go p ns = \case
+      CVar (Ix x) -> ((ns !! x) ++)
+      CApp t u -> par p appp $ go appp ns t . (' ' :) . go atomp ns u
+      CLam (fresh ns -> x) t -> par p letp $ ("λ " ++) . (x ++) . goLam (ns :> x) t
+        where
+          goLam ns (CLam (fresh ns -> x) t) =
+            (' ' :) . (x ++) . goLam (ns :> x) t
+          goLam ns t =
+            (". " ++) . go letp ns t
+      CLet (fresh ns -> x) t u ->
+        par p letp $
+          ("let " ++)
+            . (x ++)
+            . (" = " ++)
+            . go letp ns t
+            . (";\n\n" ++)
+            . go letp (ns :> x) u
+
+showCode0 :: Code -> String
+showCode0 t = prettyCode 0 [] t []

@@ -1,9 +1,8 @@
-module Evaluation (($$), quote, eval, nf, coe, force, lvl2Ix, vApp) where
+module Evaluation (($$), quote, eval, nf, tryForce, coe, force, lvl2Ix, vApp) where
 
 import Common
-import Debug.Trace (trace)
+import Data.Maybe (fromMaybe)
 import Metacontext
-import Pretty (showTm0)
 import Syntax
 import Value
 
@@ -68,10 +67,15 @@ eval env t = case t of
   Up t -> coe Upward (eval env t)
   Down t -> coe Downward (eval env t)
 
+tryForce :: Val -> Maybe Val
+tryForce = \case
+  VFlex m _ sp -> case lookupMeta m of
+    Solved _ t -> tryForce (vAppSp t sp)
+    Unsolved _ -> Nothing
+  t -> Just t
+
 force :: Val -> Val
-force = \case
-  VFlex m _ sp | Solved _ t <- lookupMeta m -> force (vAppSp t sp)
-  t -> t
+force t = fromMaybe t (tryForce t)
 
 lvl2Ix :: Lvl -> Lvl -> Ix
 lvl2Ix (Lvl l) (Lvl x) = Ix (l - x - 1)
