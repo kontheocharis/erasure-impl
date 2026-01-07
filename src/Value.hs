@@ -25,7 +25,7 @@ data Closure = Closure Env Tm
 type VTy = Val
 
 data Val
-  = VFlex MetaVar Spine
+  = VFlex MetaVar VarMode Spine
   | VRigid Lvl VarMode Spine -- default in its declared mode
   | VLam Name Mode Icit {-# UNPACK #-} Closure -- default in mode ω
   | VPi Name Mode Icit ~VTy {-# UNPACK #-} Closure -- always in mode 0
@@ -33,10 +33,10 @@ data Val
   deriving (Show)
 
 pattern VVar :: Lvl -> VarMode -> Val
-pattern VVar x m = VRigid x m []
+pattern VVar x q = VRigid x q []
 
-pattern VMeta :: MetaVar -> Val
-pattern VMeta m = VFlex m []
+pattern VMeta :: MetaVar -> VarMode -> Val
+pattern VMeta m q = VFlex m q []
 
 moveVarMode :: Dir -> VarMode -> VarMode
 moveVarMode Upward (AtMode Zero) = Upped

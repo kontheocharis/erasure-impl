@@ -53,9 +53,9 @@ rename m pren v = go pren v
 
     go :: PartialRenaming -> Val -> IO Tm
     go pren t = case force t of
-      VFlex m' sp
+      VFlex m' q sp
         | m == m' -> throwIO UnifyError -- occurs check
-        | otherwise -> goSp pren (Meta m') sp
+        | otherwise -> goSp pren (wrapMode q (Meta m')) sp
       VRigid (Lvl x) q sp -> case IM.lookup x (ren pren) of
         Nothing -> throwIO UnifyError -- scope error ("escaping variable" error)
         Just x' -> goSp pren (wrapMode q (Var (lvl2Ix (dom pren) x'))) sp
@@ -71,13 +71,13 @@ lams = go (0 :: Int)
     go x [] t = t
     go x ((q, i) : is) t = Lam ("x" ++ show (x + 1)) q i $ go (x + 1) is t
 
---       Γ      ?α         sp       rhs
-solve :: Lvl -> MetaVar -> Spine -> Val -> IO ()
-solve gamma m sp rhs = do
+--       Γ      i        ?α         sp   =? rhs
+solve :: Lvl -> VarMode -> MetaVar -> Spine -> Val -> IO ()
+solve gamma q m sp rhs = do
   pren <- invert gamma sp
   rhs <- rename m pren rhs
   let solution = eval [] $ lams (reverse $ map (\(_, q, i) -> (q, i)) sp) rhs
-  modifyIORef' mcxt $ IM.insert (unMetaVar m) (Solved solution)
+  modifyIORef' mcxt $ IM.insert (unMetaVar m) (Solved Zero solution) -- @@TODO!
 
 unifySp :: Lvl -> Spine -> Spine -> IO ()
 unifySp l sp sp' = case (sp, sp') of
@@ -95,7 +95,7 @@ unify l t u = case (force t, force u) of
   (VU, VU) -> pure ()
   (VPi x q i a b, VPi x' q' i' a' b') | q == q' && i == i' -> unify l a a' >> unify (l + 1) (b $$ VVar l (AtMode Zero)) (b' $$ VVar l (AtMode Zero))
   (VRigid x _ sp, VRigid x' _ sp') | x == x' -> unifySp l sp sp'
-  (VFlex m sp, VFlex m' sp') | m == m' -> unifySp l sp sp'
-  (VFlex m sp, t') -> solve l m sp t'
-  (t, VFlex m' sp') -> solve l m' sp' t
+  (VFlex m _ sp, VFlex m' _ sp') | m == m' -> unifySp l sp sp'
+  (VFlex m q sp, t') -> solve l q m sp t'
+  (t, VFlex m' q sp') -> solve l q m' sp' t
   _ -> throwIO UnifyError -- rigid mismatch error

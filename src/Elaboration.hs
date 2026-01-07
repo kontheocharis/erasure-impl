@@ -17,11 +17,15 @@ import Value
 -- Elaboration
 --------------------------------------------------------------------------------
 
-freshMeta :: Cxt -> IO Tm
-freshMeta cxt = do
+freshMeta :: Cxt -> Mode -> IO Tm
+freshMeta cxt q = do
   m <- readIORef nextMeta
   writeIORef nextMeta (m + 1)
-  modifyIORef' mcxt $ IM.insert m Unsolved
+  modifyIORef' mcxt $ IM.insert m (Unsolved q)
+  -- @@TODO: We need to decide what to do here... if md ctx is Zero,
+  -- should we create a meta at mode Zero? Or should we make the meta
+  -- as restricted as possible? In that case shouldn't it always be Omega?
+  -- When do we promote metas from Zero to Omega?
   pure $ InsertedMeta (MetaVar m) (bds cxt)
 
 unifyCatch :: Cxt -> Val -> Val -> IO ()
@@ -36,7 +40,7 @@ insert' cxt act = go =<< act
   where
     go (t, va) = case force va of
       VPi x q Impl a b -> do
-        m <- freshMeta cxt
+        m <- freshMeta cxt q
         let mv = eval (env cxt) m
         go (App t m q Impl, b $$ mv)
       va -> pure (t, va)
@@ -60,7 +64,7 @@ insertUntilName cxt name act = go =<< act
           then
             pure (t, va)
           else do
-            m <- freshMeta cxt
+            m <- freshMeta cxt q
             let mv = eval (env cxt) m
             go (App t m q Impl, b $$ mv)
       _ ->
@@ -96,13 +100,17 @@ check cxt t a = case (t, force a) of
     u <- check (define cxt x q vt va) u a'
     pure (Let x q a t u)
   (P.Hole, a) ->
-    freshMeta cxt
+    freshMeta cxt Omega
   (t, expected) -> do
     (t, inferred) <- insert cxt $ infer cxt t
     unifyCatch cxt expected inferred
     pure t
 
 -- Mode ω
+--
+-- @@TODO: all metas here are instantiated at mode Omega for now
+-- this might not be what we want..
+--
 infer :: Cxt -> P.Tm -> IO (Tm, VTy)
 infer cxt = \case
   P.SrcPos pos t ->
@@ -121,7 +129,7 @@ infer cxt = \case
     go 0 (types cxt)
   P.Lam x (Right i) t -> do
     let q = Omega
-    a <- eval (env cxt) <$> freshMeta cxt
+    a <- eval (env cxt) <$> freshMeta cxt Zero
     let cxt' = bind cxt x q a
     (t, b) <- insert cxt' $ infer cxt' t
     pure (Lam x q i t, VPi x q i a $ closeVal cxt b)
@@ -150,8 +158,8 @@ infer cxt = \case
         pure (q, a, b)
       tty -> do
         let q = Omega
-        a <- eval (env cxt) <$> freshMeta cxt
-        b <- Closure (env cxt) <$> freshMeta (bind cxt "x" q a)
+        a <- eval (env cxt) <$> freshMeta cxt Zero
+        b <- Closure (env cxt) <$> freshMeta (bind cxt "x" q a) Zero
         unifyCatch cxt tty (VPi "x" q i a b)
         pure (q, a, b)
 
@@ -173,6 +181,6 @@ infer cxt = \case
     (u, b) <- infer (define cxt x q vt va) u
     pure (Let x q a t u, b)
   P.Hole -> do
-    a <- eval (env cxt) <$> freshMeta cxt
-    t <- freshMeta cxt
+    a <- eval (env cxt) <$> freshMeta cxt Zero
+    t <- freshMeta cxt Omega
     pure (t, a)

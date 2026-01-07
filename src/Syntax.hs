@@ -11,7 +11,7 @@ data Tm
   | U
   | Pi Name Mode Icit Ty Ty
   | Let Name Mode Ty Tm Tm
-  | Meta MetaVar
+  | Meta MetaVar Mode
   | InsertedMeta MetaVar [BD]
   | Up Tm
   | Down Tm

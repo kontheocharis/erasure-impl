@@ -1,31 +1,28 @@
-
 module Metacontext where
 
-import Data.IORef
-import System.IO.Unsafe
-
-import qualified Data.IntMap as IM
-
 import Common
+import Data.IORef
+import qualified Data.IntMap as IM
+import System.IO.Unsafe
 import Value
 
 --------------------------------------------------------------------------------
 
-data MetaEntry = Solved Val | Unsolved
+data MetaEntry = Solved Mode Val | Unsolved Mode
 
 nextMeta :: IORef Int
 nextMeta = unsafeDupablePerformIO $ newIORef 0
-{-# noinline nextMeta #-}
+{-# NOINLINE nextMeta #-}
 
 mcxt :: IORef (IM.IntMap MetaEntry)
 mcxt = unsafeDupablePerformIO $ newIORef mempty
-{-# noinline mcxt #-}
+{-# NOINLINE mcxt #-}
 
 lookupMeta :: MetaVar -> MetaEntry
 lookupMeta (MetaVar m) = unsafeDupablePerformIO $ do
   ms <- readIORef mcxt
   case IM.lookup m ms of
-    Just e  -> pure e
+    Just e -> pure e
     Nothing -> error "impossible"
 
 reset :: IO ()

@@ -49,7 +49,7 @@ prettyTm prec = go prec
     goBDS :: Int -> [Name] -> MetaVar -> [BD] -> ShowS
     goBDS p ns m bds = case (ns, bds) of
       ([], []) -> (("?" ++ show m) ++)
-      (ns :> n, bds :> Bound) -> par p appp $ goBDS appp ns m bds . (' ' :) . (n ++)
+      (ns :> n, bds :> Bound _) -> par p appp $ goBDS appp ns m bds . (' ' :) . (n ++)
       (ns :> n, bds :> Defined) -> goBDS appp ns m bds
       _ -> error "impossible"
 
@@ -82,7 +82,7 @@ prettyTm prec = go prec
             . go letp ns t
             . (";\n\n" ++)
             . go letp (ns :> x) u
-      Meta m -> (("?" ++ show m) ++)
+      Meta m _ -> (("?" ++ show m) ++)
       InsertedMeta m bds -> goBDS p ns m bds
       Up t -> ("↑ " ++) . go atomp ns t
       Down t -> ("↓ " ++) . go atomp ns t
@@ -94,6 +94,6 @@ displayMetas :: IO ()
 displayMetas = do
   ms <- readIORef mcxt
   forM_ (IM.toList ms) $ \(m, e) -> case e of
-    Unsolved -> printf "let ?%s = ?;\n" (show m)
-    Solved v -> printf "let ?%s = %s;\n" (show m) (showTm0 $ quote 0 v)
+    Unsolved q -> printf "let %s ?%s = ?;\n" (show q) (show m)
+    Solved q v -> printf "let %s ?%s = %s;\n" (show q) (show m) (showTm0 $ quote 0 v)
   putStrLn ""
