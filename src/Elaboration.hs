@@ -104,10 +104,11 @@ infer cxt = \case
 
     go 0 (types cxt)
   P.Lam x (Right i) t -> do
+    let q = Omega
     a <- eval (env cxt) <$> freshMeta cxt
-    let cxt' = bind cxt x Omega a
+    let cxt' = bind cxt x q a
     (t, b) <- insert cxt' $ infer cxt' t
-    pure (Lam x Omega i t, VPi x Omega i a $ closeVal cxt b)
+    pure (Lam x q i t, VPi x q i a $ closeVal cxt b)
   P.Lam x Left {} t ->
     throwIO $ Error cxt $ InferNamedLam
   P.App t u i -> do
@@ -138,7 +139,7 @@ infer cxt = \case
         unifyCatch cxt tty (VPi "x" q i a b)
         pure (q, a, b)
 
-    u <- check cxt u a
+    u <- check (enter cxt q) u a
     pure (App t u q i, b $$ eval (env cxt) u)
   P.U ->
     pure (U, VU)
