@@ -12,6 +12,9 @@ let 0 Fin : Nat -> U
     -> A n;
   
 let fzero : {0 k : Nat} -> Fin (succ k)
-  = \fz fs. fz;
+  = \A fz fs. fz;
   
-(\x. _)
+let fsucc : {0 k : Nat} -> Fin k -> Fin (succ k)
+  = \n A fz fs. fs (n A fz fs);
+
+(\k. fzero {k})

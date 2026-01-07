@@ -19,9 +19,11 @@ fresh ns x
   | otherwise = x
 
 -- printing precedences
-atomp = 3 :: Int -- U, var
+atomp = 4 :: Int -- U, var
 
-appp = 2 :: Int -- application
+coerp = 2 :: Int -- coercions (up, down)
+
+appp = 3 :: Int -- application
 
 pip = 1 :: Int -- pi
 
@@ -85,8 +87,8 @@ prettyTm prec = go prec
             . go letp (ns :> x) u
       Meta m _ -> (("?" ++ show m) ++)
       InsertedMeta m _ bds -> goBDS p ns m bds
-      Up t -> par p appp $ ("↑ " ++) . go atomp ns t
-      Down t -> par p appp $ ("↓ " ++) . go atomp ns t
+      Up t -> par p coerp $ ("↑ " ++) . go coerp ns t
+      Down t -> par p coerp $ ("↓ " ++) . go coerp ns t
 
 showTm0 :: Tm -> String
 showTm0 t = prettyTm 0 [] t []
