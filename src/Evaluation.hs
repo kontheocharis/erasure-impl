@@ -1,4 +1,4 @@
-module Evaluation (($$), quote, eval, nf, coe, coeSp, force, lvl2Ix, vApp) where
+module Evaluation (($$), quote, eval, nf, coe, force, lvl2Ix, vApp) where
 
 import Common
 import Debug.Trace (trace)
@@ -42,23 +42,21 @@ move :: Dir -> Tm -> Tm
 move Upward = Up
 move Downward = Down
 
-coeSp :: Dir -> Spine -> Spine
-coeSp dir = map (\(u, q, i) -> (coe dir u, q, i))
-
 coeCl :: Dir -> Closure -> Closure
 coeCl dir (Closure env t vm) = Closure env (move dir t) vm
 
 coe :: Dir -> Val -> Val
-coe dir v = trace (">>> coercing " ++ show v ++ " to " ++ show dir) $ case v of
-  VFlex m q sp -> VFlex m (moveVarMode dir q) (coeSp dir sp)
-  VRigid x q sp -> VRigid x (moveVarMode dir q) (coeSp dir sp)
+-- coe dir v = trace (">>> coercing " ++ show v ++ " to " ++ show dir) $ case v of
+coe dir v = case v of
+  VFlex m q sp -> VFlex m (moveVarMode dir q) sp
+  VRigid x q sp -> VRigid x (moveVarMode dir q) sp
   VLam x q i t -> VLam x q i (coeCl dir t)
   VPi iu x q i a b -> VPi (moveIsUpped dir iu) x q i a b
   VU iu -> VU (moveIsUpped dir iu)
 
 eval :: Env -> Tm -> Val
-eval env t = trace (">>>>>> evaluating " ++ show t ++ " at " ++ show env) $ case t of
-  -- eval env t = case t of
+-- eval env t = trace (">>>>>> evaluating " ++ show t ++ " at " ++ show env) $ case t of
+eval env t = case t of
   Var x _ -> env !! unIx x
   App t u q i -> vApp (eval env t) (eval env u) q i
   Lam x q i t -> VLam x q i (Closure env t (AtMode q))

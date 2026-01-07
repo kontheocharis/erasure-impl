@@ -75,7 +75,7 @@ lams = go (0 :: Int)
 
 --       Γ      i        ?α         sp   =? rhs
 solve :: Lvl -> VarMode -> MetaVar -> Spine -> Val -> IO ()
-solve gamma Upped m sp rhs = solve gamma (AtMode Zero) m (coeSp Downward sp) rhs
+solve gamma Upped m sp rhs = solve gamma (AtMode Zero) m sp (coe Downward rhs)
 solve gamma Downed m sp rhs = do
   throwIO MetaSolutionTooWeak
 -- solve gamma (AtMode Omega) m (coeSp Upward sp) rhs

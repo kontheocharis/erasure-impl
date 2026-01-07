@@ -11,8 +11,8 @@ let 0 Fin : Nat -> U
     -> ({0 k : Nat} -> A k -> A (succ k))
     -> A n;
   
--- let fzero : {0 k : Nat} -> Fin (succ k)
--- = \fz fs. fz;
+let fzero : {0 k : Nat} -> Fin (succ k)
+= \fz fs. fz;
 
 -- let foo : (0 bang : Nat -> Nat) -> Nat -> Nat = _;
 
@@ -20,7 +20,7 @@ let 0 Fin : Nat -> U
 -- = fzero {k = bang n};
 
 
-Nat
+fzero
 
 -- let foo : (0 bang : Nat -> Nat) -> Nat -> Nat
 -- foo bang = ?
