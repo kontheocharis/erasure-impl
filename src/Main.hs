@@ -59,7 +59,7 @@ mainWith getOpt getRaw = do
     ['e' : 'x' : optMode] -> do
       q <- parseMode optMode
       (t, a) <- elab q
-      let e = extract [] t
+      let e = extract t
       putStrLn $ showCode0 e
     _ -> showHelp
 

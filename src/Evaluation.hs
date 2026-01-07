@@ -1,4 +1,4 @@
-module Evaluation (($$), quote, eval, nf, tryForce, coe, force, lvl2Ix, vApp) where
+module Evaluation (($$), quote, eval, nf, tryForce, coe, force, ix2Lvl, lvl2Ix, vApp) where
 
 import Common
 import Data.Maybe (fromMaybe)
@@ -79,6 +79,9 @@ force t = fromMaybe t (tryForce t)
 
 lvl2Ix :: Lvl -> Lvl -> Ix
 lvl2Ix (Lvl l) (Lvl x) = Ix (l - x - 1)
+
+ix2Lvl :: Lvl -> Ix -> Lvl
+ix2Lvl (Lvl l) (Ix x) = Lvl (l - x - 1)
 
 quoteSp :: Lvl -> Tm -> Spine -> Tm
 quoteSp l t = \case

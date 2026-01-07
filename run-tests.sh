@@ -20,7 +20,7 @@ for f in test/bad/*.er; do
 done
 
 for f in test/good/*.er; do
-    output=$(cat "$f" | $IMPL nf 2>&1)
+    output=$((cat "$f" | $IMPL nf 2>&1) && (cat "$f" | $IMPL ex 2>&1))
     exitcode=$?
     if echo "$output" | grep -q "CallStack"; then
         echo "PANIC: $f"
