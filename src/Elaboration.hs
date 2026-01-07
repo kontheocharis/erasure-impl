@@ -66,19 +66,25 @@ insertUntilName cxt name act = go =<< act
       _ ->
         throwIO $ Error cxt $ NoNamedImplicitArg name
 
+-- Mode given as argument
+checkIn :: Cxt -> Mode -> P.Tm -> VTy -> IO Tm
+checkIn cxt Zero t a = Down <$> check (enter cxt Zero) t a
+checkIn cxt Omega t a = check cxt t a
+
+-- Mode ω
 check :: Cxt -> P.Tm -> VTy -> IO Tm
 check cxt t a = case (t, force a) of
   (P.SrcPos pos t, a) ->
     check (cxt {pos = pos}) t a
   -- If the icitness of the lambda matches the Pi type, check as usual
   (P.Lam x i t, VPi x' q' i' a b) | either (\x -> x == x' && i' == Impl) (== i') i -> do
-    Lam x q' i' <$> check (bind cxt x q' a) t (b $$ VVar (lvl cxt) q')
+    Lam x q' i' <$> check (bind cxt x q' a) t (b $$ VVar (lvl cxt) (diffVarMode q' Zero))
 
   -- Otherwise if Pi is implicit, insert a new implicit lambda
   (t, VPi x q Impl a b) -> do
-    Lam x q Impl <$> check (newBinder cxt x q a) t (b $$ VVar (lvl cxt) q)
+    Lam x q Impl <$> check (newBinder cxt x q a) t (b $$ VVar (lvl cxt) (diffVarMode q Zero))
   (P.Let x q a t u, a') -> do
-    a <- check cxt a VU
+    a <- checkIn cxt Zero a VU
     let ~va = eval (env cxt) a
     t <- check cxt t va
     let ~vt = eval (env cxt) t
@@ -91,13 +97,18 @@ check cxt t a = case (t, force a) of
     unifyCatch cxt expected inferred
     pure t
 
+-- Mode ω
 infer :: Cxt -> P.Tm -> IO (Tm, VTy)
 infer cxt = \case
   P.SrcPos pos t ->
     infer (cxt {pos = pos}) t
   P.Var x -> do
     let go ix (types :> (x', origin, q, a))
-          | x == x' && origin == Source = pure (Var ix q, a)
+          | x == x' && origin == Source = case (md cxt, q) of
+              (Omega, Omega) -> pure (Var ix q, a)
+              (Omega, Zero) -> throwIO $ Error cxt $ InsufficientMode
+              (Zero, Omega) -> pure (Var ix q, a)
+              (Zero, Zero) -> pure (Up (Var ix q), a)
           | otherwise = go (ix + 1) types
         go ix [] =
           throwIO $ Error cxt $ NameNotInScope x
@@ -139,7 +150,7 @@ infer cxt = \case
         unifyCatch cxt tty (VPi "x" q i a b)
         pure (q, a, b)
 
-    u <- check (enter cxt q) u a
+    u <- checkIn cxt q u a
     pure (App t u q i, b $$ eval (env cxt) u)
   P.U ->
     pure (U, VU)
@@ -148,7 +159,7 @@ infer cxt = \case
     b <- check (bind cxt x Zero (eval (env cxt) a)) b VU
     pure (Pi x q i a b, VU)
   P.Let x q a t u -> do
-    a <- check cxt a VU
+    a <- checkIn cxt Zero a VU
     let ~va = eval (env cxt) a
     t <- check cxt t va
     let ~vt = eval (env cxt) t

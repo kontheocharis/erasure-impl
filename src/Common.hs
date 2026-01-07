@@ -13,6 +13,8 @@ type Name = String
 
 data Mode = Zero | Omega deriving (Eq)
 
+data Dir = Upward | Downward deriving (Eq)
+
 data Icit = Impl | Expl deriving (Eq)
 
 data BD = Bound | Defined deriving (Show)

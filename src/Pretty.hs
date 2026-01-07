@@ -4,7 +4,7 @@ import Common
 import Control.Monad
 import Data.IORef
 import qualified Data.IntMap.Strict as IM
-import Evaluation
+import {-# SOURCE #-} Evaluation
 import Metacontext
 import Syntax
 import Text.Printf
@@ -84,6 +84,8 @@ prettyTm prec = go prec
             . go letp (ns :> x) u
       Meta m -> (("?" ++ show m) ++)
       InsertedMeta m bds -> goBDS p ns m bds
+      Up t -> ("↑ " ++) . go atomp ns t
+      Down t -> ("↓ " ++) . go atomp ns t
 
 showTm0 :: Tm -> String
 showTm0 t = prettyTm 0 [] t []

@@ -13,4 +13,6 @@ data Tm
   | Let Name Mode Ty Tm Tm
   | Meta MetaVar
   | InsertedMeta MetaVar [BD]
+  | Up Tm
+  | Down Tm
   deriving (Show)

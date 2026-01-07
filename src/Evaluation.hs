@@ -1,7 +1,9 @@
 module Evaluation (($$), quote, eval, nf, force, lvl2Ix, vApp) where
 
 import Common
+import Debug.Trace (trace)
 import Metacontext
+import Pretty (showTm0)
 import Syntax
 import Value
 
@@ -34,8 +36,20 @@ vAppBDs env ~v bds = case (env, bds) of
   (env :> t, bds :> Defined) -> vAppBDs env v bds
   _ -> error "impossible"
 
+move :: Dir -> Tm -> Tm
+move Upward = Up
+move Downward = Down
+
+coe :: Dir -> Val -> Val
+coe dir = \case
+  VFlex m sp -> VFlex m (map (\(u, q', i) -> (coe dir u, q', i)) sp)
+  VRigid x q sp -> VRigid x (moveVarMode dir q) (map (\(u, q', i) -> (coe dir u, q', i)) sp)
+  VLam x q i (Closure env t) -> VLam x q i (Closure env (move dir t))
+  VPi x q i a (Closure env b) -> VPi x q i (coe dir a) (Closure env (move dir b))
+  VU -> VU
+
 eval :: Env -> Tm -> Val
-eval env = \case
+eval env t = trace ("trying to eval " ++ show t ++ " in " ++ show env) $ case t of
   Var x _ -> env !! unIx x
   App t u q i -> vApp (eval env t) (eval env u) q i
   Lam x q i t -> VLam x q i (Closure env t)
@@ -44,6 +58,8 @@ eval env = \case
   U -> VU
   Meta m -> vMeta m
   InsertedMeta m bds -> vAppBDs env (vMeta m) bds
+  Up t -> coe Upward (eval env t)
+  Down t -> coe Downward (eval env t)
 
 force :: Val -> Val
 force = \case
@@ -59,11 +75,11 @@ quoteSp l t = \case
   sp :> (u, q, i) -> App (quoteSp l t sp) (quote l u) q i
 
 quote :: Lvl -> Val -> Tm
-quote l t = case force t of
+quote l t = trace ("trying to quote " ++ show t) $ case force t of
   VFlex m sp -> quoteSp l (Meta m) sp
-  VRigid x q sp -> quoteSp l (Var (lvl2Ix l x) q) sp
-  VLam x q i t -> Lam x q i (quote (l + 1) (t $$ VVar l q))
-  VPi x q i a b -> Pi x q i (quote l a) (quote (l + 1) (b $$ VVar l q))
+  VRigid x q sp -> quoteSp l (wrapMode q (Var (lvl2Ix l x))) sp
+  VLam x q i t -> Lam x q i (quote (l + 1) (t $$ VVar l (AtMode q)))
+  VPi x q i a b -> Pi x q i (quote l a) (quote (l + 1) (b $$ VVar l (AtMode Zero)))
   VU -> U
 
 nf :: Env -> Tm -> Tm
