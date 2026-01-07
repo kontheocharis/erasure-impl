@@ -18,6 +18,11 @@ mult Zero _ = Zero
 mult _ Zero = Zero
 mult Omega Omega = Omega
 
+leq :: Mode -> Mode -> Bool
+leq Zero _ = True
+leq Omega Omega = True
+leq _ _ = False
+
 data Dir = Upward | Downward deriving (Eq, Show)
 
 data Icit = Impl | Expl deriving (Eq)

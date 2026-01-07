@@ -13,5 +13,6 @@ let fzero : {0 k : Nat} -> Fin (succ k)
 
 let foo : (0 bang : Nat -> Nat) -> Nat -> Nat = \bang n. _;
 let bar : (0 bang : Nat -> Nat) -> (n : Nat) -> Fin (foo bang n)
-   = \bang n. fzero {k = bang n};
-foo
+  = \bang n. fzero {k = bang n};
+
+fzero

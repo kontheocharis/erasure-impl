@@ -5,7 +5,7 @@ import Common (Ix (..), Lvl (..), Mode (..))
 import Data.Maybe (fromJust)
 import Evaluation
 import Syntax (Tm (..))
-import Value (Env, VarMode (..), pattern VVar)
+import Value (Env, pattern VVar)
 
 -- The environment used during extraction
 --
@@ -19,8 +19,8 @@ extract :: Tm -> Code
 extract t = go (0, [], 0, []) t
   where
     extend :: ExEnv -> Mode -> ExEnv
-    extend (n, env, rn, real) q@Zero = (n + 1, VVar (Lvl n) (AtMode q) : env, rn, Nothing : real)
-    extend (n, env, rn, real) q@Omega = (n + 1, VVar (Lvl n) (AtMode q) : env, rn + 1, Just (Lvl rn) : real)
+    extend (n, env, rn, real) q@Zero = (n + 1, VVar (Lvl n) q : env, rn, Nothing : real)
+    extend (n, env, rn, real) q@Omega = (n + 1, VVar (Lvl n) q : env, rn + 1, Just (Lvl rn) : real)
 
     goMeta :: ExEnv -> Tm -> Code
     goMeta exenv@(n, env, _, _) t = case tryForce (eval env t) of
@@ -41,5 +41,3 @@ extract t = go (0, [], 0, []) t
       InsertedMeta _ _ _ -> goMeta env t
       Pi x q i a b -> error "extracting Pi"
       U -> error "extracting U"
-      Up t -> error "extracting Up"
-      Down t -> error "extracting Down"

@@ -43,12 +43,12 @@ emptyCxt p = Cxt [] 0 [] [] p Omega
 -- | Extend Cxt with a bound variable.
 bind :: Cxt -> Name -> Mode -> VTy -> Cxt
 bind (Cxt env l types bds pos md) x q ~a =
-  Cxt (env :> VVar l (AtMode q)) (l + 1) (types :> (x, Source, q, a)) (bds :> Bound q) pos md
+  Cxt (env :> VVar l q) (l + 1) (types :> (x, Source, q, a)) (bds :> Bound q) pos md
 
 -- | Insert a new binding.
 newBinder :: Cxt -> Name -> Mode -> VTy -> Cxt
 newBinder (Cxt env l types bds pos md) x q ~a =
-  Cxt (env :> VVar l (AtMode q)) (l + 1) (types :> (x, Inserted, q, a)) (bds :> Bound q) pos md
+  Cxt (env :> VVar l q) (l + 1) (types :> (x, Inserted, q, a)) (bds :> Bound q) pos md
 
 -- | Extend Cxt with a definition.
 define :: Cxt -> Name -> Mode -> Val -> VTy -> Cxt
@@ -56,8 +56,8 @@ define (Cxt env l types bds pos md) x q ~t ~a =
   Cxt (env :> t) (l + 1) (types :> (x, Source, q, a)) (bds :> Defined) pos md
 
 -- | closeVal : (Γ : Con) → Val (Γ, x : A) B → Closure Γ A B
-closeVal :: Cxt -> Val -> VarMode -> Closure
-closeVal cxt t m = Closure (env cxt) (quote (lvl cxt + 1) t) m
+closeVal :: Cxt -> Val -> Closure
+closeVal cxt t = Closure (env cxt) (quote (lvl cxt + 1) t)
 
 -- | closeVal : (Γ : Con) → Val (Γ, x : A) B → Closure Γ A B
 enter :: Cxt -> Mode -> Cxt

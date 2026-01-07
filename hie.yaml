@@ -1,2 +1,6 @@
 cradle:
   stack:
+    - path: "./explicit"
+      component: "erasure-impl:exe:explicit"
+    - path: "./implicit"
+      component: "erasure-impl:exe:implicit"
