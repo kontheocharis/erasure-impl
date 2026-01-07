@@ -25,16 +25,18 @@ helpMsg =
       "  type   : read & typecheck expression from stdin, print its type"
     ]
 
+showHelp = putStrLn helpMsg >> exitFailure
+
 mainWith :: IO [String] -> IO (P.Tm, String) -> IO ()
 mainWith getOpt getRaw = do
   let elab m = do
         (t, file) <- getRaw
         inferIn (emptyCxt (initialPos file)) m t
-          `catch` \e -> displayError file e >> exitFailure
+          `catch` \e -> (displayError file e >> exitFailure)
 
   let parseMode "0" = pure Zero
       parseMode "" = pure Omega
-      parseMode _ = putStrLn helpMsg >> exitFailure
+      parseMode _ = showHelp
 
   reset
   getOpt >>= \case
@@ -59,7 +61,7 @@ mainWith getOpt getRaw = do
       (t, a) <- elab q
       let e = extract [] t
       putStrLn $ showCode0 e
-    _ -> putStrLn helpMsg
+    _ -> showHelp
 
 main :: IO ()
 main = mainWith getArgs parseStdin
