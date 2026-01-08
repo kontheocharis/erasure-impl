@@ -26,7 +26,8 @@ freshMeta cxt q = do
         (Omega, Zero) -> Zero
         (Zero, Zero) -> Zero
         (Omega, Omega) -> Omega
-  modifyIORef' mcxt $ IM.insert m (Unsolved metaMd)
+  let mds = modes cxt
+  modifyIORef' mcxt $ IM.insert m (Unsolved mds metaMd)
   pure $ InsertedMeta (MetaVar m) metaMd (bds cxt)
 
 unifyCatch :: Cxt -> Val -> Val -> IO ()
@@ -117,17 +118,17 @@ infer cxt = \case
   P.SrcPos pos t ->
     infer (cxt {pos = pos}) t
   P.Var x -> do
-    let go ix (types :> (x', origin, q, a))
+    let go ix (types :> (x', origin, a)) (modes :> q)
           | x == x' && origin == Source = case (md cxt, q) of
               (Omega, Omega) -> pure (Var ix q, a)
               (Omega, Zero) -> throwIO $ Error cxt $ InsufficientMode
               (Zero, Omega) -> pure (Var ix q, a)
               (Zero, Zero) -> pure (Var ix q, a)
-          | otherwise = go (ix + 1) types
-        go ix [] =
-          throwIO $ Error cxt $ NameNotInScope x
+          | otherwise = go (ix + 1) types modes
+        go ix [] [] = throwIO $ Error cxt $ NameNotInScope x
+        go ix _ _ = error "unreachable"
 
-    go 0 (types cxt)
+    go 0 (types cxt) (modes cxt)
   P.Lam x (Right i) t -> do
     let q = Omega
     a <- eval (env cxt) <$> freshMeta cxt Zero

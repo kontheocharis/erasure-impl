@@ -29,23 +29,30 @@ lift :: Mode -> PartialRenaming -> PartialRenaming
 lift q (PRen dom cod ren) =
   PRen (dom + 1) (cod + 1) (IM.insert (unLvl cod) (dom, q) ren)
 
--- | @invert : (Γ : Cxt) → (spine : Sub Δ Γ) → PRen Γ Δ@
-invert :: Lvl -> Mode -> Spine -> IO PartialRenaming
-invert gamma q sp = do
-  let go :: Spine -> IO (Lvl, IM.IntMap (Lvl, Mode))
-      go [] = pure (0, mempty)
-      go (sp :> (t, _, _)) = do
-        (dom, ren) <- go sp
+-- | @invert : # ∈ Δ → (Γ : Cxt) → (spine : Sub Δ Γ) → PRen Γ Δ@
+invert :: Mode -> Lvl -> Mode -> [Mode] -> Spine -> IO PartialRenaming
+invert lq gamma q modes sp = do
+  let go :: Spine -> [Mode] -> IO (Lvl, IM.IntMap (Lvl, Mode))
+      go [] [] = pure (0, mempty)
+      go (sp :> (t, _, _)) (modes :> mq) = do
+        (dom, ren) <- go sp modes
         case force t of
           VVar (Lvl x) q'
             | IM.notMember x ren ->
-                -- @@FIXME: this is wrong, and we need spine inversion tests
-                if q `leq` q'
-                  then pure (dom + 1, IM.insert x (dom, q') ren)
-                  else throwIO MetaSolutionTooWeak
+                let ok = (dom + 1, IM.insert x (dom, q') ren)
+                 in if q == Omega && lq == Zero
+                      then
+                        -- Here we basically check if:
+                        -- The meta was created in mode Omega, we are in mode Zero, and we
+                        -- use a relevant variable where an irrelevant one is expected.
+                        -- In this case the invert is invalid
+                        if q' == Omega && mq == Zero
+                          then throwIO MetaSolutionTooWeak
+                          else pure ok
+                      else pure ok
           _ -> throwIO UnifyError
-
-  (dom, ren) <- go sp
+      go _ _ = pure (0, mempty) -- we might have more applications than what the meta expects
+  (dom, ren) <- go sp modes
   pure $ PRen dom gamma ren
 
 -- | Perform the partial renaming on rhs, while also checking for "m" occurrences.
@@ -81,7 +88,8 @@ solve :: Mode -> Lvl -> Mode -> MetaVar -> Spine -> Val -> IO ()
 solve Zero gamma Omega m sp rhs = do
   throwIO MetaSolutionTooWeak -- @@TODO: can try check/prune RHS? Or otherwise promote metas
 solve lq gamma q m sp rhs = do
-  pren <- invert gamma q sp
+  let modes = getMetaModes m
+  pren <- invert lq gamma q modes sp
   rhs <- rename m pren rhs
   let solution = eval [] $ lams (reverse $ map (\(_, q, i) -> (q, i)) sp) rhs
   modifyIORef' mcxt $ IM.insert (unMetaVar m) (Solved q solution)

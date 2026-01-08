@@ -26,7 +26,7 @@ vAppSp t = \case
 vMeta :: MetaVar -> Val
 vMeta m = case lookupMeta m of
   Solved _ v -> v
-  Unsolved q -> VMeta m q
+  Unsolved _ q -> VMeta m q
 
 vAppBDs :: Env -> Val -> [BD] -> Val
 vAppBDs env ~v bds = case (env, bds) of
@@ -51,7 +51,7 @@ tryForce :: Val -> Maybe Val
 tryForce = \case
   VFlex m _ sp -> case lookupMeta m of
     Solved _ t -> tryForce (vAppSp t sp)
-    Unsolved _ -> Nothing
+    Unsolved _ _ -> Nothing
   t -> Just t
 
 force :: Val -> Val

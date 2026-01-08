@@ -78,6 +78,3 @@ There is also a code extraction capability invoked with the `ex` flag, that spit
 out untyped lambda calculus terms, removing all erased/compile-time data.
 
 This can be directly combined with 2LTT approaches.
-
-> [!WARNING]  
-> This is still buggy at the moment, regarding metavariable handling.

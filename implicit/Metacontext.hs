@@ -8,7 +8,7 @@ import Value
 
 --------------------------------------------------------------------------------
 
-data MetaEntry = Solved Mode Val | Unsolved Mode
+data MetaEntry = Solved Mode Val | Unsolved [Mode] Mode
 
 nextMeta :: IORef Int
 nextMeta = unsafeDupablePerformIO $ newIORef 0
@@ -24,6 +24,13 @@ lookupMeta (MetaVar m) = unsafeDupablePerformIO $ do
   case IM.lookup m ms of
     Just e -> pure e
     Nothing -> error "impossible"
+
+getMetaModes :: MetaVar -> [Mode]
+getMetaModes (MetaVar m) = unsafeDupablePerformIO $ do
+  ms <- readIORef mcxt
+  case IM.lookup m ms of
+    Just (Unsolved ms _) -> pure ms
+    _ -> error "impossible"
 
 reset :: IO ()
 reset = do

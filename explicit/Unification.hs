@@ -30,7 +30,6 @@ lift q (PRen dom cod ren) =
   PRen (dom + 1) (cod + 1) (IM.insert (unLvl cod) (dom, q) ren)
 
 -- | @invert : (Γ : Cxt) → (spine : Sub Δ Γ) → PRen Γ Δ@
--- @@TODO: verify this is actually correct
 invert :: Lvl -> Mode -> Spine -> IO PartialRenaming
 invert gamma q sp = do
   let go :: Spine -> IO (Lvl, IM.IntMap (Lvl, VarMode))
