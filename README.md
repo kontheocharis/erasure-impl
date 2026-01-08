@@ -6,6 +6,7 @@ Toy implementation of type theory with erasure as a phase distinction.
 > Kovács' `elaboration-zoo` which is reasonably well-known
 > (specifically [`elaboration-zoo/04-implicit-args`](https://github.com/AndrasKovacs/elaboration-zoo/tree/master/04-implicit-args))
 
+
 For type formers we only have mode-aware Π, and U. The notation is:
 
 ```haskell
@@ -77,3 +78,6 @@ There is also a code extraction capability invoked with the `ex` flag, that spit
 out untyped lambda calculus terms, removing all erased/compile-time data.
 
 This can be directly combined with 2LTT approaches.
+
+> [!WARNING]  
+> This is still buggy at the moment, regarding metavariable handling.
