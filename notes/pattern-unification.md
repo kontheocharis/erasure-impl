@@ -1,11 +1,11 @@
-# Unification with phases
+# Pattern unification with erasure
 
 Pattern unification is about solving a certain subset of higher-order
 unification problems, that allow us to implement implicit arguments and other
 elaborationf eatures. How does pattern unification generalise when we are
 dealing with a language that has phase distinctions, like erasure?
 
-We assume working knowledge of CwFs/algebraic type theory.
+We assume basic working knowledge of CwF-style type theory.
 
 ## Review of pattern unification
 
@@ -16,8 +16,11 @@ In standard dependent type theory, a pattern unification problem has the form:
 ```
 
 where `Γ, Δ : Con`, `σ : Sub Γ Δ`, `t : Tm Γ A[σ]`, and `?m : Tm Δ A` is the
-(neutral) hole we want to solve for. This is subject to the additional
-conditions:
+(neutral) hole we want to solve for. We can think of `Δ` as the context in which
+the metavariable is created, and `Γ` as the context in which a solution is being
+attempted.
+
+For a solution to exist, we must have the following additional conditions:
 
 1. `σ` is a linear renaming: it consists only of distinct variables in
   `Γ`. In other words, it is a `σ : LinRen Γ Δ ⊆ Ren Γ Δ ⊆ Sub Γ Δ`. We can
@@ -50,15 +53,14 @@ function type: `?m = Δ ⇒ t[σ⁻¹]`
 
 There are further things we can do to 'pre-process' the problem, primarily to
 *prune* metavariable spines ocurring inside `t`, so that those variables don't
-need to appear in `σ` for a solution to be valid. We won't worry about this
-because it is somewhat orthogonal to our goals.
+need to appear in `σ` for a solution to be valid. This is orthogonal to the
+rest of this document.
 
-## Pattern unification with erasure
+## Adding erasure
 
-What happens when we add erasure to the theory? There are two main things:
+What happens when we add erasure to the language? There are two main things:
 
 1. We now have both runtime terms `Tm ω` and erased terms `Tm 0`.
-  We use `Γ ▷[i] A` for context extension of `Tm i`.
 2. There is an additional proof-irrelevant sort `# ∈ Γ` with context extension
     `Γ ▷ #` whose (decidable) presence determines whether we can coerce `Tm 0`
     to `Tm ω`; we can always coerce `Tm ω` to `Tm 0`. More specifically, we have
@@ -79,8 +81,10 @@ A pattern unification problem now looks the same as before
 ```
 
 where `Γ, Δ : Con`, `σ : Sub Γ Δ`, `t : Tm ω Γ A[σ]`, and `?m : Tm ω Δ A` is the
-(neutral) hole we want to solve for. This is subject to additional
-conditions which are slightly different than before:
+(neutral) hole we want to solve for.
+
+For a solution, we must have the following conditions which are slightly
+different than before:
 
 1. `σ` is a linear renaming *up to mode shifts*: it consists only of distinct
   variables in `Γ` potentially wrapped in `↑` or `↓`. These renamings are still
@@ -91,12 +95,30 @@ conditions which are slightly different than before:
    mean that `t[σ⁻¹]` is defined.
 3. `t` does not contain `?m`.
 
-
-
-
 The `# ∈ Γ` sort is proof-irrelevant, meaning for any two witnesses `p, q : # ∈
-Γ` , we have `p ≡ q`. Because of this, in implementation we only need a flag on
-contexts that records if `#` is present, rather than mixing it with all the
-other context entires.
+Γ` , we have `p ≡ q`. Therefore, in implementation:
 
-  
+- We (only) need a flag on contexts that records if `#` is present (to decide `#
+  ∈ Γ`, but also for typechecking)
+- We also need a flag on metavariable contexts for the same reason (to decide `# ∈ Δ`)
+
+Besides that, the implementation depends on if we choose to include the mode
+shifts as part of the syntax in the compiler. We implement both approaches
+in this repository.
+
+### If mode shifts are part of the compiler syntax (`explicit`)
+
+We can decide condition 2 just by looking at whether there are any `↑`/`↓`
+wrappers in the spine `σ`. We don't need to know the mode of any variable for
+unification, only for typechecking. Regardless, we keep track of the declared
+modes of variables in the syntax itself. This is technically not necessary but
+allows us to have a few more asserts to ensure the behaviour of mode shifting is 
+correct.
+
+### If mode shifts aren't part of the compiler syntax (`implicit`)
+
+We must record the *modes* of all bindings for each metavariable context. We can
+then compare them to the modes of the variables in the spine `σ` to check
+condition 2. One way to achieve this is to have access to the context's mode
+bindings during unification. Alternatively, we can choose to remember variable
+modes in the syntax itself. We choose the latter.
