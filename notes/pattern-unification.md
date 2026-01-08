@@ -90,7 +90,9 @@ different than before:
   variables in `Γ` potentially wrapped in `↑` or `↓`. These renamings are still
   epimorphisms, but it only sometimes possible to invert them;
 2. If `# ∈ Γ` and `# ∉ Δ`, then `σ` must not contain any `↓`, because those
-  cannot be inverted.
+  cannot be inverted. -- Actually this rule is wrong; @@FIXME: it should be that no solution
+  is allowed under such circumstances unless the RHS doesn't use `#`/can be strengthened...
+  this is more annoying!
 2. `t` only contains variables from `σ`. This along with conditions 1 and 2
    mean that `t[σ⁻¹]` is defined.
 3. `t` does not contain `?m`.
