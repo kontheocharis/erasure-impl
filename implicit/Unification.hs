@@ -39,6 +39,7 @@ invert gamma q sp = do
         case force t of
           VVar (Lvl x) q'
             | IM.notMember x ren ->
+                -- @@FIXME: this is wrong, and we need spine inversion tests
                 if q `leq` q'
                   then pure (dom + 1, IM.insert x (dom, q') ren)
                   else throwIO MetaSolutionTooWeak
