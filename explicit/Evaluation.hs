@@ -2,7 +2,6 @@ module Evaluation (($$), quote, eval, nf, tryForce, force, up, down, ix2Lvl, lvl
 
 import Common
 import Data.Maybe (fromMaybe)
-import Debug.Trace (trace, traceStack)
 import Metacontext
 import Syntax
 import Value
@@ -10,7 +9,7 @@ import Value
 infixl 8 $$
 
 ($$) :: Closure -> Val -> Val
-($$) (Closure mrk env t isd) ~u = eval mrk (env :> ifIsDowned up isd u) t
+($$) (Closure env t isd) ~u = eval (env :> ifIsDowned up isd u) t
 
 vApp :: Val -> Val -> Mode -> Icit -> Val
 -- vApp t ~u q i = trace (">>>>>> applying " ++ show t ++ " to " ++ show u ++ " at mode " ++ show q ++ " and icit " ++ show i) $ case t of
@@ -37,19 +36,19 @@ vAppBDs env ~v bds = case (env, bds) of
   (env :> t, bds :> Defined) -> vAppBDs env v bds
   _ -> error "impossible"
 
-eval :: Marker -> Env -> Tm -> Val
+eval :: Env -> Tm -> Val
 -- eval mrk env t = trace (">>>>>> evaluating " ++ show t ++ " at " ++ show env) $ case t of
-eval mrk env t = case t of
+eval env t = case t of
   Var x -> env !! unIx x
-  App t u q i -> vApp (eval mrk env t) (eval mrk env u) q i
-  Lam x q i t -> VLam NotDowned x q i (Closure mrk env t NotDowned)
-  Pi x q i a b -> VPi NotUpped x q i (eval mrk env a) (Closure mrk env b NotDowned)
-  Let _ _ _ t u -> eval mrk (env :> eval mrk env t) u
+  App t u q i -> vApp (eval env t) (eval env u) q i
+  Lam x q i t -> VLam NotDowned x q i (Closure env t NotDowned)
+  Pi x q i a b -> VPi NotUpped x q i (eval env a) (Closure env b NotDowned)
+  Let _ _ _ t u -> eval (env :> eval env t) u
   U -> VU NotUpped
   Meta m mrk -> vMeta m mrk
   InsertedMeta m mrk bds -> vAppBDs env (vMeta m mrk) bds
-  Up t -> up (eval mrk env t)
-  Down t -> down (eval Present env t)
+  Up t -> up (eval env t)
+  Down t -> down (eval env t)
 
 up :: Val -> Val
 up = moveVal Upward
@@ -97,4 +96,4 @@ quote l t = case force t of
   VU isu -> ifIsUpped upS isu U
 
 nf :: Marker -> Env -> Tm -> Tm
-nf mrk env t = quote (Lvl (length env)) (eval mrk env t)
+nf mrk env t = quote (Lvl (length env)) (eval env t)

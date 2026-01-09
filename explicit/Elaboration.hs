@@ -28,7 +28,7 @@ freshMeta cxt q = do
   pure $ ifIsDowned Down isd (InsertedMeta (MetaVar m) (ifIsDowned (ext Present) isd (marker cxt)) (bds cxt))
 
 evalIn :: Cxt -> Tm -> Val
-evalIn cxt t = eval (marker cxt) (env cxt) t
+evalIn cxt t = eval (env cxt) t
 
 unifyCatch :: Cxt -> Val -> Val -> IO ()
 unifyCatch cxt t t' =
@@ -167,7 +167,7 @@ infer cxt = \case
         let q = Omega
         a <- evalIn cxt <$> freshMeta cxt Zero
         b <-
-          Closure (marker cxt) (env cxt)
+          Closure (env cxt)
             <$> freshMeta (bind cxt "x" q a) Zero
             <*> pure (downToZero q)
         unifyCatch cxt tty (VPi NotUpped "x" q i a b)

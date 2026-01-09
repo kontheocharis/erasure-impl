@@ -6,7 +6,6 @@ import Control.Monad (when)
 import Data.IORef
 import qualified Data.IntMap as IM
 import Data.Maybe (fromMaybe)
-import Debug.Trace (trace)
 import Errors
 import Evaluation
 import Metacontext
@@ -117,7 +116,7 @@ solve gamma m YesDowned Absent sp rhs = throwIO MetaSolutionTooWeak
 solve gamma m NotDowned mrk sp rhs = do
   pren <- invert gamma mrk sp
   rhs <- rename m pren rhs
-  let solution = eval mrk [] $ lams (reverse $ map (\(_, q, i) -> (q, i)) sp) rhs
+  let solution = eval [] $ lams (reverse $ map (\(_, q, i) -> (q, i)) sp) rhs
   modifyIORef' mcxt $ IM.insert (unMetaVar m) (Solved solution)
 
 unifySp :: Lvl -> Spine -> Spine -> IO ()
@@ -133,31 +132,16 @@ unifySp l sp sp' = case (sp, sp') of
 unify :: Lvl -> Val -> Val -> IO ()
 unify l t u = case (force t, force u) of
   -- unify lmrk l t u = trace (">>>>>> unifying " ++ show (force t) ++ " and " ++ show (force u) ++ " at level " ++ show l ++ " with marker " ++ show lmrk) $ case (force t, force u) of
-  (VLam isd _ q _ t, VLam isd' _ q' _ t') ->
-    unify (l + 1) (t $$ VVar l q) (t' $$ VVar l q')
-  (t, VLam isd _ q i t') ->
-    unify
-      (l + 1)
-      (vApp (ifIsDowned up isd t) (VVar l q) q i)
-      (t' $$ VVar l q)
-  (VLam isd _ q i t, t') ->
-    unify
-      (l + 1)
-      (t $$ VVar l q)
-      (vApp (ifIsDowned up isd t') (VVar l q) q i)
-  (VU isu, VU isu') -> assert (isu == isu') $ pure ()
-  (VPi isu x q i a b, VPi isu' x' q' i' a' b')
-    | q == q' && i == i' ->
-        assert (isu == isu') $
-          unify l a a' >> unify (l + 1) (b $$ VVar l Zero) (b' $$ VVar l Zero)
-  (VRigid isd _ x sp, VRigid isd' _ x' sp')
-    | x == x' ->
-        assert (isd == isd') $
-          unifySp l sp sp'
-  (VFlex isd m _ sp, VFlex isd' m' _ sp')
-    | m == m' ->
-        assert (isd == isd') $
-          unifySp l sp sp'
+  (VLam _ _ q _ t, VLam _ _ q' _ t') -> unify (l + 1) (t $$ VVar l q) (t' $$ VVar l q')
+  (t, VLam isd _ q i t') -> unify (l + 1) (vApp (ifIsDowned up isd t) (VVar l q) q i) (t' $$ VVar l q)
+  (VLam isd _ q i t, t') -> unify (l + 1) (t $$ VVar l q) (vApp (ifIsDowned up isd t') (VVar l q) q i)
+  (VU _, VU _) -> pure ()
+  (VPi _ x q i a b, VPi isu' x' q' i' a' b')
+    | q == q' && i == i' -> unify l a a' >> unify (l + 1) (b $$ VVar l Zero) (b' $$ VVar l Zero)
+  (VRigid _ _ x sp, VRigid _ _ x' sp')
+    | x == x' -> unifySp l sp sp'
+  (VFlex _ m _ sp, VFlex _ m' _ sp')
+    | m == m' -> unifySp l sp sp'
   (VFlex isd m mrk sp, t') -> solve l m isd mrk sp t'
   (t, VFlex isd m' mrk sp') -> solve l m' isd mrk sp' t
   _ -> throwIO UnifyError -- rigid mismatch error

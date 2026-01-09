@@ -57,7 +57,7 @@ define (Cxt env l types bds pos md) x q ~t ~a =
 
 -- | closeVal : (Γ : Con) → Val (Γ, x : A) B → Closure Γ A B
 closeVal :: Cxt -> Val -> IsDowned -> Closure
-closeVal cxt t isd = Closure (marker cxt) (env cxt) (quote (lvl cxt + 1) t) isd
+closeVal cxt t isd = Closure (env cxt) (quote (lvl cxt + 1) t) isd
 
 enterMarker :: Cxt -> Cxt
 enterMarker (Cxt env l types bds pos _) = Cxt env l types bds pos Present

@@ -23,7 +23,7 @@ extract t = go (0, [], 0, []) t
     extend (n, env, rn, real) q@Omega = (n + 1, VVar (Lvl n) q : env, rn + 1, Just (Lvl rn) : real)
 
     goMeta :: ExEnv -> Tm -> Code
-    goMeta exenv@(n, env, _, _) t = case tryForce (eval Absent env t) of
+    goMeta exenv@(n, env, _, _) t = case tryForce (eval env t) of
       Just t' -> go exenv (quote (Lvl n) t')
       Nothing -> error "extracting unsolved Meta"
 

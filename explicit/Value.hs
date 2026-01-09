@@ -13,10 +13,7 @@ data IsUpped = YesUpped | NotUpped
 data IsDowned = YesDowned | NotDowned
   deriving (Eq, Show)
 
-data Closure = Closure Marker Env Tm IsDowned
-  deriving (Show)
-
-data ModeWrapped a = UpWrapped a | DownWrapped a | Plain a
+data Closure = Closure Env Tm IsDowned
   deriving (Show)
 
 type VTy = Val
@@ -89,8 +86,3 @@ fromZero Omega = Just Upward
 downToZero :: Mode -> IsDowned
 downToZero Zero = NotDowned
 downToZero Omega = YesDowned
-
-wrappedDirection :: ModeWrapped a -> Maybe Dir
-wrappedDirection (Plain _) = Nothing
-wrappedDirection (UpWrapped _) = Just Upward
-wrappedDirection (DownWrapped _) = Just Downward
