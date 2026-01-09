@@ -44,7 +44,7 @@ mainWith getOpt getRaw = do
     ['n' : 'f' : optMode] -> do
       q <- parseMode optMode
       (t, a) <- elab q
-      putStrLn $ showTm0 $ nf [] t
+      putStrLn $ showTm0 $ nf (getMarker q) [] t
       putStrLn "  :"
       putStrLn $ showTm0 $ quote 0 a
     ['t' : 'y' : 'p' : 'e' : optMode] -> do

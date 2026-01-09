@@ -5,14 +5,22 @@ import Common
 type Ty = Tm
 
 data Tm
-  = Var Ix Mode
+  = Var Ix
   | Lam Name Mode Icit Tm
   | App Tm Tm Mode Icit
   | U
   | Pi Name Mode Icit Ty Ty
   | Let Name Mode Ty Tm Tm
-  | Meta MetaVar Mode
-  | InsertedMeta MetaVar Mode [BD]
+  | Meta MetaVar Marker
+  | InsertedMeta MetaVar Marker [BD]
   | Up Tm
   | Down Tm
   deriving (Show)
+
+downS :: Tm -> Tm
+downS (Up t) = t
+downS t = Down t
+
+upS :: Tm -> Tm
+upS (Down t) = t
+upS t = Up t

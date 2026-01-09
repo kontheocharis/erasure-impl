@@ -13,12 +13,31 @@ type Name = String
 
 data Mode = Zero | Omega deriving (Eq)
 
+data Marker = Present | Absent deriving (Eq, Show)
+
 mult :: Mode -> Mode -> Mode
 mult Zero _ = Zero
 mult _ Zero = Zero
 mult Omega Omega = Omega
 
+ext :: Marker -> Marker -> Marker
+ext Present _ = Present
+ext _ Present = Present
+ext Absent Absent = Absent
+
+getMode :: Marker -> Mode
+getMode Present = Zero
+getMode Absent = Omega
+
+getMarker :: Mode -> Marker
+getMarker Zero = Present
+getMarker Omega = Absent
+
 data Dir = Upward | Downward deriving (Eq, Show)
+
+invertDir :: Dir -> Dir
+invertDir Upward = Downward
+invertDir Downward = Upward
 
 data Icit = Impl | Expl deriving (Eq)
 

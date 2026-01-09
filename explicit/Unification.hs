@@ -2,8 +2,11 @@ module Unification (unify) where
 
 import Common
 import Control.Exception
+import Control.Monad (when)
 import Data.IORef
 import qualified Data.IntMap as IM
+import Data.Maybe (fromMaybe)
+import Debug.Trace (trace)
 import Errors
 import Evaluation
 import Metacontext
@@ -19,31 +22,37 @@ data PartialRenaming = PRen
     dom :: Lvl,
     -- | size of Δ
     cod :: Lvl,
+    -- | Whether # ∈ Γ
+    domMrk :: Marker,
     -- | mapping from Δ vars to Γ vars
-    ren :: IM.IntMap (Lvl, VarMode)
+    ren :: IM.IntMap (Lvl, Maybe Dir)
   }
+  deriving (Show)
 
 -- | Lifting a partial renaming over an extra bound variable.
 --   Given (σ : PRen Γ Δ), (lift σ : PRen (Γ, x {i}: A[σ]) (Δ, x {i}: A))
-lift :: VarMode -> PartialRenaming -> PartialRenaming
-lift q (PRen dom cod ren) =
-  PRen (dom + 1) (cod + 1) (IM.insert (unLvl cod) (dom, q) ren)
+lift :: PartialRenaming -> PartialRenaming
+lift (PRen dom cod domMd ren) =
+  PRen (dom + 1) (cod + 1) domMd (IM.insert (unLvl cod) (dom, Nothing) ren)
 
--- | @invert : (Γ : Cxt) → (spine : Sub Δ Γ) → PRen Γ Δ@
-invert :: Lvl -> Mode -> Spine -> IO PartialRenaming
-invert gamma q sp = do
-  let go :: Spine -> IO (Lvl, IM.IntMap (Lvl, VarMode))
+-- | Lifting a partial renaming over an erasure marker variable.
+liftMarker :: PartialRenaming -> PartialRenaming
+liftMarker (PRen dom cod domMd ren) =
+  PRen dom cod Present ren
+
+-- | invert : (Γ : Cxt) → # ∈ Γ → Sub Δ Γ → PRen Γ Δ
+invert :: Lvl -> Marker -> Spine -> IO PartialRenaming
+invert gamma mrk sp = do
+  let go :: Spine -> IO (Lvl, IM.IntMap (Lvl, Maybe Dir))
       go [] = pure (0, mempty)
       go (sp :> (t, _, _)) = do
         (dom, ren) <- go sp
         case force t of
-          VVar (Lvl x) q' | IM.notMember x ren -> case invertVarMode q' q of
-            Just q'inv -> pure (dom + 1, IM.insert x (dom, q'inv) ren)
-            Nothing -> throwIO UnifyError
+          VWrappedVar (Lvl x) d | IM.notMember x ren -> pure (dom + 1, IM.insert x (dom, invertDir <$> d) ren)
           _ -> throwIO UnifyError
 
   (dom, ren) <- go sp
-  pure $ PRen dom gamma ren
+  pure $ PRen dom gamma mrk ren
 
 -- | Perform the partial renaming on rhs, while also checking for "m" occurrences.
 rename :: MetaVar -> PartialRenaming -> Val -> IO Tm
@@ -53,17 +62,45 @@ rename m pren v = go pren v
     goSp pren t [] = pure t
     goSp pren t (sp :> (u, q, i)) = App <$> goSp pren t sp <*> go pren u <*> pure q <*> pure i
 
+    ensureIsUppedValid :: PartialRenaming -> IsUpped -> IO ()
+    ensureIsUppedValid pren isu = case (domMrk pren, isu) of
+      (Absent, YesUpped) -> throwIO MetaSolutionTooWeak
+      _ -> pure ()
+
     go :: PartialRenaming -> Val -> IO Tm
+    -- go pren t = trace ("Renaming " ++ show t ++ " with pren " ++ show pren) $ case force t of
     go pren t = case force t of
-      VFlex m' q sp
+      VFlex isd m' mrk sp
         | m == m' -> throwIO UnifyError -- occurs check
-        | otherwise -> goSp pren (wrapMode q (Meta m')) sp
-      VRigid (Lvl x) q sp -> case IM.lookup x (ren pren) of
-        Nothing -> throwIO UnifyError -- scope error ("escaping variable" error)
-        Just (x', q') -> goSp pren (wrapMode (substVarMode q q') (Var (lvl2Ix (dom pren) x'))) sp
-      VLam x q i t -> Lam x q i <$> go (lift (AtMode q) pren) (t $$ VVar (cod pren) (AtMode q))
-      VPi iu x q i a b -> wrapIsUpped iu <$> (Pi x q i <$> go pren a <*> go (lift (AtMode Zero) pren) (b $$ VVar (cod pren) (AtMode Zero)))
-      VU iu -> pure $ wrapIsUpped iu U
+        | otherwise ->
+            ifIsDowned downS isd
+              <$> goSp (ifIsDowned liftMarker isd pren) (Meta m' mrk) sp
+      VRigid isd isu (Lvl x) sp -> do
+        when (isd == NotDowned) (ensureIsUppedValid pren isu)
+        case IM.lookup x (ren pren) of
+          Nothing -> throwIO UnifyError -- scope error ("escaping variable" error)
+          Just (x', dir) ->
+            ifIsDowned downS isd
+              <$> goSp
+                (ifIsDowned liftMarker isd pren)
+                (ifIsUpped upS (fromMaybe isu (moveIsUpped <$> dir <*> pure isu)) $ Var (lvl2Ix (dom pren) x'))
+                sp
+      VLam isd x q i t ->
+        ifIsDowned downS isd
+          <$> Lam x q i
+          <$> go
+            ( ifIsDowned
+                liftMarker
+                isd
+                (lift pren)
+            )
+            (t $$ VVar (cod pren) q)
+      VPi isu x q i a b -> do
+        ensureIsUppedValid pren isu
+        ifIsUpped upS isu <$> (Pi x q i <$> go pren a <*> go (lift pren) (b $$ VVar (cod pren) Zero))
+      VU isu -> do
+        ensureIsUppedValid pren isu
+        pure $ ifIsUpped upS isu U
 
 -- | Wrap a term in lambdas. We need an extra list of Icit-s to
 --   match the type of the to-be-solved meta.
@@ -74,36 +111,53 @@ lams = go (0 :: Int)
     go x ((q, i) : is) t = Lam ("x" ++ show (x + 1)) q i $ go (x + 1) is t
 
 --       Γ      i        ?α         sp   =? rhs
-solve :: Mode -> Lvl -> VarMode -> MetaVar -> Spine -> Val -> IO ()
-solve lq gamma Upped m sp rhs = solve lq gamma (AtMode Zero) m sp (coe Downward rhs)
-solve lq gamma Downed m sp rhs = solve lq gamma (AtMode Omega) m sp (coe Upward rhs) -- this will lead to the case below
-solve Zero gamma (AtMode Omega) m sp rhs = do
-  throwIO MetaSolutionTooWeak -- @@TODO: can try check/prune RHS? Or otherwise promote metas
-solve lq gamma (AtMode q) m sp rhs = do
-  pren <- invert gamma q sp
+solve :: Lvl -> MetaVar -> IsDowned -> Marker -> Spine -> Val -> IO ()
+solve gamma m YesDowned mrk@Present sp rhs = solve gamma m NotDowned mrk sp (up rhs)
+solve gamma m YesDowned Absent sp rhs = throwIO MetaSolutionTooWeak
+solve gamma m NotDowned mrk sp rhs = do
+  pren <- invert gamma mrk sp
   rhs <- rename m pren rhs
-  let solution = eval [] $ lams (reverse $ map (\(_, q, i) -> (q, i)) sp) rhs
-  modifyIORef' mcxt $ IM.insert (unMetaVar m) (Solved q solution)
+  let solution = eval mrk [] $ lams (reverse $ map (\(_, q, i) -> (q, i)) sp) rhs
+  modifyIORef' mcxt $ IM.insert (unMetaVar m) (Solved solution)
 
-unifySp :: Mode -> Lvl -> Spine -> Spine -> IO ()
-unifySp lq l sp sp' = case (sp, sp') of
+unifySp :: Lvl -> Spine -> Spine -> IO ()
+unifySp l sp sp' = case (sp, sp') of
   ([], []) -> pure ()
   -- Note: we don't have to compare Icit-s, since we know from the recursive
   -- call that sp and sp' have the same type.
   (sp :> (t, q, _), sp' :> (t', q', _))
     | q == q' ->
-        unifySp lq l sp sp' >> unify (mult lq q) l t t'
+        unifySp l sp sp' >> unify l t t'
   _ -> throwIO UnifyError -- rigid mismatch error
 
-unify :: Mode -> Lvl -> Val -> Val -> IO ()
-unify lq l t u = case (force t, force u) of
-  (VLam _ q _ t, VLam _ q' _ t') -> unify lq (l + 1) (t $$ VVar l (AtMode q)) (t' $$ VVar l (AtMode q'))
-  (t, VLam _ q i t') -> unify lq (l + 1) (vApp t (VVar l (AtMode q)) q i) (t' $$ VVar l (AtMode q))
-  (VLam _ q i t, t') -> unify lq (l + 1) (t $$ VVar l (AtMode q)) (vApp t' (VVar l (AtMode q)) q i)
-  (VU _, VU _) -> pure ()
-  (VPi _ x q i a b, VPi _ x' q' i' a' b') | q == q' && i == i' -> unify Zero l a a' >> unify Zero (l + 1) (b $$ VVar l (AtMode Zero)) (b' $$ VVar l (AtMode Zero))
-  (VRigid x _ sp, VRigid x' _ sp') | x == x' -> unifySp lq l sp sp'
-  (VFlex m _ sp, VFlex m' _ sp') | m == m' -> unifySp lq l sp sp'
-  (VFlex m q sp, t') -> solve lq l q m sp t'
-  (t, VFlex m' q sp') -> solve lq l q m' sp' t
+unify :: Lvl -> Val -> Val -> IO ()
+unify l t u = case (force t, force u) of
+  -- unify lmrk l t u = trace (">>>>>> unifying " ++ show (force t) ++ " and " ++ show (force u) ++ " at level " ++ show l ++ " with marker " ++ show lmrk) $ case (force t, force u) of
+  (VLam isd _ q _ t, VLam isd' _ q' _ t') ->
+    unify (l + 1) (t $$ VVar l q) (t' $$ VVar l q')
+  (t, VLam isd _ q i t') ->
+    unify
+      (l + 1)
+      (vApp (ifIsDowned up isd t) (VVar l q) q i)
+      (t' $$ VVar l q)
+  (VLam isd _ q i t, t') ->
+    unify
+      (l + 1)
+      (t $$ VVar l q)
+      (vApp (ifIsDowned up isd t') (VVar l q) q i)
+  (VU isu, VU isu') -> assert (isu == isu') $ pure ()
+  (VPi isu x q i a b, VPi isu' x' q' i' a' b')
+    | q == q' && i == i' ->
+        assert (isu == isu') $
+          unify l a a' >> unify (l + 1) (b $$ VVar l Zero) (b' $$ VVar l Zero)
+  (VRigid isd _ x sp, VRigid isd' _ x' sp')
+    | x == x' ->
+        assert (isd == isd') $
+          unifySp l sp sp'
+  (VFlex isd m _ sp, VFlex isd' m' _ sp')
+    | m == m' ->
+        assert (isd == isd') $
+          unifySp l sp sp'
+  (VFlex isd m mrk sp, t') -> solve l m isd mrk sp t'
+  (t, VFlex isd m' mrk sp') -> solve l m' isd mrk sp' t
   _ -> throwIO UnifyError -- rigid mismatch error

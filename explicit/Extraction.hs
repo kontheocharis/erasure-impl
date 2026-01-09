@@ -1,11 +1,11 @@
 module Extraction where
 
 import Code (Code (..))
-import Common (Ix (..), Lvl (..), Mode (..))
+import Common (Ix (..), Lvl (..), Marker (..), Mode (..))
 import Data.Maybe (fromJust)
 import Evaluation
 import Syntax (Tm (..))
-import Value (Env, VarMode (..), pattern VVar)
+import Value (Env, IsUpped (NotUpped), pattern VVar)
 
 -- The environment used during extraction
 --
@@ -19,18 +19,17 @@ extract :: Tm -> Code
 extract t = go (0, [], 0, []) t
   where
     extend :: ExEnv -> Mode -> ExEnv
-    extend (n, env, rn, real) q@Zero = (n + 1, VVar (Lvl n) (AtMode q) : env, rn, Nothing : real)
-    extend (n, env, rn, real) q@Omega = (n + 1, VVar (Lvl n) (AtMode q) : env, rn + 1, Just (Lvl rn) : real)
+    extend (n, env, rn, real) q@Zero = (n + 1, VVar (Lvl n) q : env, rn, Nothing : real)
+    extend (n, env, rn, real) q@Omega = (n + 1, VVar (Lvl n) q : env, rn + 1, Just (Lvl rn) : real)
 
     goMeta :: ExEnv -> Tm -> Code
-    goMeta exenv@(n, env, _, _) t = case tryForce (eval env t) of
+    goMeta exenv@(n, env, _, _) t = case tryForce (eval Absent env t) of
       Just t' -> go exenv (quote (Lvl n) t')
       Nothing -> error "extracting unsolved Meta"
 
     go :: ExEnv -> Tm -> Code
     go env@(n, _, rn, real) t = case t of
-      Var (Ix x) Omega -> CVar (lvl2Ix (Lvl rn) (fromJust $ real !! x))
-      Var _ Zero -> error "extracting Zero variable"
+      Var (Ix x) -> CVar (lvl2Ix (Lvl rn) (fromJust $ real !! x))
       App t u Omega i -> CApp (go env t) (go env u)
       App t u Zero i -> go env t
       Lam x Omega i t -> CLam x (go (extend env Omega) t)

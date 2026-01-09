@@ -21,18 +21,18 @@ freshMeta :: Cxt -> Mode -> IO Tm
 freshMeta cxt q = do
   m <- readIORef nextMeta
   writeIORef nextMeta (m + 1)
-  let metaMd = case (md cxt, q) of
-        (Zero, Omega) -> Upped
-        (Omega, Zero) -> AtMode Zero
-        (Zero, Zero) -> AtMode Zero
-        (Omega, Omega) -> AtMode Omega
-  let actual = varModeOriginalMode metaMd
-  modifyIORef' mcxt $ IM.insert m (Unsolved actual)
-  pure $ wrapMode metaMd (\q' -> InsertedMeta (MetaVar m) q' (bds cxt))
+  let isd = case q of
+        Omega -> NotDowned
+        Zero -> YesDowned
+  modifyIORef' mcxt $ IM.insert m Unsolved
+  pure $ ifIsDowned Down isd (InsertedMeta (MetaVar m) (ifIsDowned (ext Present) isd (marker cxt)) (bds cxt))
+
+evalIn :: Cxt -> Tm -> Val
+evalIn cxt t = eval (marker cxt) (env cxt) t
 
 unifyCatch :: Cxt -> Val -> Val -> IO ()
 unifyCatch cxt t t' =
-  unify (md cxt) (lvl cxt) t t'
+  unify (lvl cxt) t t'
     `catch` \e -> throwIO $ Error cxt $ CantUnify (quote (lvl cxt) t) (quote (lvl cxt) t') e
 
 -- | Insert fresh implicit applications.
@@ -42,7 +42,7 @@ insert' cxt act = go =<< act
     go (t, va) = case force va of
       VPi NotUpped x q Impl a b -> do
         m <- freshMeta cxt q
-        let mv = eval (env cxt) m
+        let mv = evalIn cxt m
         go (App t m q Impl, b $$ mv)
       va -> pure (t, va)
 
@@ -66,7 +66,7 @@ insertUntilName cxt name act = go =<< act
             pure (t, va)
           else do
             m <- freshMeta cxt q
-            let mv = eval (env cxt) m
+            let mv = evalIn cxt m
             go (App t m q Impl, b $$ mv)
       _ ->
         throwIO $ Error cxt $ NoNamedImplicitArg name
@@ -77,10 +77,8 @@ insertUntilName cxt name act = go =<< act
 checkIn :: Cxt -> Mode -> P.Tm -> VTy -> IO Tm
 checkIn cxt Zero t a = do
   -- shallow check for mode 0
-  t' <- check (enter cxt Zero) t a
-  case t' of
-    Up t'' -> pure t''
-    _ -> pure $ Down t'
+  t' <- check (enterMarker cxt) t a
+  pure (downS t')
 checkIn cxt Omega t a = check cxt t a
 
 -- Mode ω
@@ -92,16 +90,16 @@ check cxt t a = case (t, force a) of
     check (cxt {pos = pos}) t a
   -- If the icitness of the lambda matches the Pi type, check as usual
   (P.Lam x i t, VPi NotUpped x' q' i' a b) | either (\x -> x == x' && i' == Impl) (== i') i -> do
-    Lam x q' i' <$> check (bind cxt x q' a) t (b $$ VVar (lvl cxt) (diffVarMode q' Zero))
+    Lam x q' i' <$> check (bind cxt x q' a) t (b $$ VWrappedVar (lvl cxt) (fromZero q'))
 
   -- Otherwise if Pi is implicit, insert a new implicit lambda
   (t, VPi NotUpped x q Impl a b) -> do
-    Lam x q Impl <$> check (newBinder cxt x q a) t (b $$ VVar (lvl cxt) (diffVarMode q Zero))
+    Lam x q Impl <$> check (newBinder cxt x q a) t (b $$ VWrappedVar (lvl cxt) (fromZero q))
   (P.Let x q a t u, a') -> do
     a <- checkIn cxt Zero a (VU NotUpped)
-    let ~va = eval (env cxt) a
+    let ~va = evalIn cxt a
     t <- checkIn cxt q t va
-    let ~vt = eval (env cxt) t
+    let ~vt = evalIn cxt t
     u <- check (define cxt x q vt va) u a'
     pure (Let x q a t u)
   (P.Hole, a) ->
@@ -113,10 +111,8 @@ check cxt t a = case (t, force a) of
 
 inferIn :: Cxt -> Mode -> P.Tm -> IO (Tm, VTy)
 inferIn cxt Zero t = do
-  (t, a) <- infer (enter cxt Zero) t
-  case t of
-    Up t' -> pure (t', a)
-    _ -> pure (Down t, a)
+  (t, a) <- infer (enterMarker cxt) t
+  pure (downS t, a)
 inferIn cxt Omega t = infer cxt t
 
 -- Mode ω
@@ -128,11 +124,11 @@ infer cxt = \case
     infer (cxt {pos = pos}) t
   P.Var x -> do
     let go ix (types :> (x', origin, q, a))
-          | x == x' && origin == Source = case (md cxt, q) of
-              (Omega, Omega) -> pure (Var ix q, a)
-              (Omega, Zero) -> throwIO $ Error cxt $ InsufficientMode
-              (Zero, Omega) -> pure (Var ix q, a)
-              (Zero, Zero) -> pure (Up (Var ix q), a)
+          | x == x' && origin == Source = case (marker cxt, q) of
+              (Absent, Omega) -> pure (Var ix, a)
+              (Absent, Zero) -> throwIO $ Error cxt $ InsufficientMode
+              (Present, Omega) -> pure (Var ix, a)
+              (Present, Zero) -> pure (Up (Var ix), a)
           | otherwise = go (ix + 1) types
         go ix [] =
           throwIO $ Error cxt $ NameNotInScope x
@@ -140,10 +136,10 @@ infer cxt = \case
     go 0 (types cxt)
   P.Lam x (Right i) t -> do
     let q = Omega
-    a <- eval (env cxt) <$> freshMeta cxt Zero
+    a <- evalIn cxt <$> freshMeta cxt Zero
     let cxt' = bind cxt x q a
     (t, b) <- insert cxt' $ infer cxt' t
-    pure (Lam x q i t, VPi NotUpped x q i a $ closeVal cxt b (diffVarMode q Zero))
+    pure (Lam x q i t, VPi NotUpped x q i a $ closeVal cxt b (downToZero q))
   P.Lam x Left {} t ->
     throwIO $ Error cxt $ InferNamedLam
   P.App t u i -> do
@@ -169,29 +165,32 @@ infer cxt = \case
         pure (q, a, b)
       tty -> do
         let q = Omega
-        a <- eval (env cxt) <$> freshMeta cxt Zero
-        b <- Closure (env cxt) <$> freshMeta (bind cxt "x" q a) Zero <*> pure (diffVarMode q Zero)
+        a <- evalIn cxt <$> freshMeta cxt Zero
+        b <-
+          Closure (marker cxt) (env cxt)
+            <$> freshMeta (bind cxt "x" q a) Zero
+            <*> pure (downToZero q)
         unifyCatch cxt tty (VPi NotUpped "x" q i a b)
         pure (q, a, b)
 
     u <- checkIn cxt q u a
-    pure (App t u q i, b $$ eval (env cxt) (wrapMode (diffVarMode q Zero) (\_ -> u)))
+    pure (App t u q i, b $$ evalIn cxt (ifIsDowned Down (downToZero q) u))
   P.U -> do
-    when (md cxt /= Zero) (throwIO $ Error cxt $ InsufficientMode)
+    when (marker cxt /= Present) (throwIO $ Error cxt $ InsufficientMode)
     pure (Up U, VU NotUpped)
   P.Pi x q i a b -> do
-    when (md cxt /= Zero) (throwIO $ Error cxt $ InsufficientMode)
+    when (marker cxt /= Present) (throwIO $ Error cxt $ InsufficientMode)
     a <- checkIn cxt Zero a (VU NotUpped)
-    b <- checkIn (bind cxt x Zero (eval (env cxt) a)) Zero b (VU NotUpped)
+    b <- checkIn (bind cxt x Zero (evalIn cxt a)) Zero b (VU NotUpped)
     pure (Up (Pi x q i a b), (VU NotUpped))
   P.Let x q a t u -> do
     a <- checkIn cxt Zero a (VU NotUpped)
-    let ~va = eval (env cxt) a
+    let ~va = evalIn cxt a
     t <- checkIn cxt q t va
-    let ~vt = eval (env cxt) t
+    let ~vt = evalIn cxt t
     (u, b) <- infer (define cxt x q vt va) u
     pure (Let x q a t u, b)
   P.Hole -> do
-    a <- eval (env cxt) <$> freshMeta cxt Zero
+    a <- evalIn cxt <$> freshMeta cxt Zero
     t <- freshMeta cxt Omega
     pure (t, a)

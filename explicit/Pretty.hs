@@ -58,7 +58,7 @@ prettyTm prec = go prec
 
     go :: Int -> [Name] -> Tm -> ShowS
     go p ns = \case
-      Var (Ix x) _ -> ((ns !! x) ++)
+      Var (Ix x) -> ((ns !! x) ++)
       App t u _ Expl -> par p appp $ go appp ns t . (' ' :) . go atomp ns u
       App t u _ Impl -> par p appp $ go appp ns t . (' ' :) . bracket (go letp ns u)
       Lam (fresh ns -> x) q i t -> par p letp $ ("λ " ++) . lamBind x i . goLam (ns :> x) t
@@ -97,8 +97,8 @@ displayMetas :: IO ()
 displayMetas = do
   ms <- readIORef mcxt
   forM_ (IM.toList ms) $ \(m, e) -> case e of
-    Unsolved q -> printf "let %s ?%s = ?;\n" (show q) (show m)
-    Solved q v -> printf "let %s ?%s = %s;\n" (show q) (show m) (showTm0 $ quote 0 v)
+    Unsolved -> printf "let ω ?%s = ?;\n" (show m)
+    Solved v -> printf "let ω ?%s = %s;\n" (show m) (showTm0 $ quote 0 v)
   putStrLn ""
 
 prettyCode :: Int -> [Name] -> Code -> ShowS

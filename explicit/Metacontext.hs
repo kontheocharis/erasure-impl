@@ -8,7 +8,7 @@ import Value
 
 --------------------------------------------------------------------------------
 
-data MetaEntry = Solved Mode Val | Unsolved Mode
+data MetaEntry = Solved Val | Unsolved
 
 nextMeta :: IORef Int
 nextMeta = unsafeDupablePerformIO $ newIORef 0

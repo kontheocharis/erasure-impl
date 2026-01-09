@@ -40,7 +40,7 @@ executables:
     source-dirs: explicit
     ghc-options:
       - -O
-  
+
   implicit:
     main: Main.hs
     source-dirs: implicit
