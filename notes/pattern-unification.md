@@ -2,7 +2,7 @@
 
 Pattern unification is about solving a certain subset of higher-order
 unification problems, that allow us to implement implicit arguments and other
-elaborationf eatures. How does pattern unification generalise when we are
+elaboration features. How does pattern unification generalise when we are
 dealing with a language that has phase distinctions, like erasure?
 
 We assume basic working knowledge of CwF-style type theory.
@@ -74,6 +74,10 @@ Point 1 is not of consequence. Up to definitional equality, every erased term is
 of the form `↓ b : Tm 0 Γ A` for some runtime term `b : Tm ω (Γ ▷ #) A`. For
 this reason, we only need metas in `Tm ω`.
 
+We don't need to change pattern unification, because this formulation of erasure
+is *structural*; in other words it is describable in HOAS as a universe closed
+under some type formers.
+
 A pattern unification problem now looks the same as before
 
 ```
@@ -83,26 +87,55 @@ A pattern unification problem now looks the same as before
 where `Γ, Δ : Con`, `σ : Sub Γ Δ`, `t : Tm ω Γ A[σ]`, and `?m : Tm ω Δ A` is the
 (neutral) hole we want to solve for.
 
-For a solution, we must have the following conditions which are slightly
-different than before:
+For a solution, we must have the same conditions as before:
+
+1. `σ` is a linear renaming.
+2. `t` only contains variables from `σ`.
+3. `t` does not contain `?m`.
+
+However, since `# ∈ Γ` is a representable sort, a renaming might
+now a contain a witness of `#`. For example,
+```
+(p, x, y). (p, x) : LinRen (∙ ▷ # ▷[0] A ▷[ω] B) (∙ ▷ # ▷[0] A)
+```
+is a valid linear renaming.
+
+Annoyingly, there are some problems that do not fall under these conditions
+but that appear quite often. Consider the spine
+```
+(p, x). (p, ↑x) : Sub (∙ ▷ # ▷[0] A) (∙ ▷ # ▷[ω] A)
+```
+This is not a renaming because it is not only made of variables. However,
+we can always invert it:
+```
+(p, x). (p, ↓x) : Sub (∙ ▷ # ▷[ω] A) (∙ ▷ # ▷[0] A)
+```
+This is a very special case of a more general approach to inverting terms that
+are determined up to definitional isomorphism (see
+https://cstheory.stackexchange.com/a/50918/77156)
+
+Given this, we can refine the spine condition (1) to be:
 
 1. `σ` is a linear renaming *up to mode shifts*: it consists only of distinct
-  variables in `Γ` potentially wrapped in `↑` or `↓`. These renamings are still
-  epimorphisms, but it only sometimes possible to invert them;
-2. If `# ∈ Γ` and `# ∉ Δ`, then `σ` must not contain any `↓`, because those
-  cannot be inverted. -- Actually this rule is wrong; @@FIXME: it should be that no solution
-  is allowed under such circumstances unless the RHS doesn't use `#`/can be strengthened...
-  this is more annoying!
-2. `t` only contains variables from `σ`. This along with conditions 1 and 2
-   mean that `t[σ⁻¹]` is defined.
-3. `t` does not contain `?m`.
+  variables in `Γ` potentially wrapped in `↑` or `↓`.
+
+These renamings are still epimorphisms, and it is possible to invert them
+into partial substitutions.
+
+### Optimising the representation of `#`
 
 The `# ∈ Γ` sort is proof-irrelevant, meaning for any two witnesses `p, q : # ∈
 Γ` , we have `p ≡ q`. Therefore, in implementation:
 
-- We (only) need a flag on contexts that records if `#` is present (to decide `#
-  ∈ Γ`, but also for typechecking)
-- We also need a flag on metavariable contexts for the same reason (to decide `# ∈ Δ`)
+- For typechecking, we (only) need a flag on contexts `Γ` that records if `# ∈ Γ`.
+- For pattern unification, need a flag to appear on metavariable spines `σ : Sub Γ Δ` that records if `# ∈ Δ`.
+
+To decide if a spine `σ` meets the condition (1), it is sufficient to check that
+it contains only distinct variables up to `↑/↓`.
+
+To decide if a term `t` meets condition (2), we must also check that if `Δ` does
+not contain `#` then `t` must not contain any `↑` coercions (unless they are
+nested under `↓`). 
 
 Besides that, the implementation depends on if we choose to include the mode
 shifts as part of the syntax in the compiler. We implement both approaches
@@ -110,17 +143,16 @@ in this repository.
 
 ### If mode shifts are part of the compiler syntax (`explicit`)
 
-We can decide condition 2 just by looking at whether there are any `↑`/`↓`
-wrappers in the spine `σ`. We don't need to know the mode of any variable for
-unification, only for typechecking. Regardless, we keep track of the declared
-modes of variables in the syntax itself. This is technically not necessary but
-allows us to have a few more asserts to ensure the behaviour of mode shifting is 
-correct.
+We can decide condition 2 just by looking at the `↑`/`↓` wrappers in the spine
+`σ`. We don't need to know the mode of any variable for unification, only for
+typechecking. Regardless, we keep track of the declared modes of variables in
+the syntax itself. This is technically not necessary but allows us to have a few
+more asserts to ensure the behaviour of mode shifting is correct.
 
 ### If mode shifts aren't part of the compiler syntax (`implicit`)
 
 We must record the *modes* of all bindings for each metavariable context. We can
 then compare them to the modes of the variables in the spine `σ` to check
-condition 2. One way to achieve this is to have access to the context's mode
-bindings during unification. Alternatively, we can choose to remember variable
-modes in the syntax itself. We choose the latter.
+condition 2. This means we need access to the context's mode bindings during
+unification. Alternatively, we can choose to remember variable modes in the
+syntax itself. We choose the latter.
