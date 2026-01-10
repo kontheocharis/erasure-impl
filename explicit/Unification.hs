@@ -6,7 +6,6 @@ import Control.Monad (when)
 import Data.IORef
 import qualified Data.IntMap as IM
 import Data.Maybe (fromMaybe)
-import Debug.Trace (trace)
 import Errors
 import Evaluation
 import Metacontext
@@ -30,17 +29,18 @@ data PartialRenaming = PRen
   deriving (Show)
 
 -- | Lifting a partial renaming over an extra bound variable.
---   Given (σ : PRen Γ Δ), (lift σ : PRen (Γ, x {i}: A[σ]) (Δ, x {i}: A))
+--   Given (σ : PRen Γ Δ), (lift σ : PRen (Γ, i x : A[σ]) (Δ, i x : A))
 lift :: PartialRenaming -> PartialRenaming
 lift (PRen dom cod domMd ren) =
   PRen (dom + 1) (cod + 1) domMd (IM.insert (unLvl cod) (dom, Nothing) ren)
 
 -- | Lifting a partial renaming over an erasure marker variable.
+--   Given (σ : PRen Γ Δ), (lift σ : PRen (Γ, #) (Δ, #))
 liftMarker :: PartialRenaming -> PartialRenaming
 liftMarker (PRen dom cod domMd ren) =
   PRen dom cod Present ren
 
--- | invert : (Γ : Cxt) → # ∈ Γ → Sub Δ Γ → PRen Γ Δ
+-- | invert : (Γ : Cxt) → # ∈ Γ → Sub Γ Δ → PRen Δ Γ
 invert :: Lvl -> Marker -> Spine -> IO PartialRenaming
 invert gamma mrk sp = do
   let go :: Spine -> IO (Lvl, IM.IntMap (Lvl, Maybe Dir))
@@ -57,7 +57,7 @@ invert gamma mrk sp = do
   (dom, ren) <- go sp
   pure $ PRen dom gamma mrk ren
 
--- | Perform the partial renaming on rhs, while also checking for "m" occurrences.
+-- | rename : (m : Meta i Δ) → PRen Δ Γ → Val Γ → Tm Δ
 rename :: MetaVar -> PartialRenaming -> Val -> IO Tm
 rename m pren v = go pren v
   where
@@ -65,55 +65,46 @@ rename m pren v = go pren v
     goSp pren t [] = pure t
     goSp pren t (sp :> (u, q, i)) = App <$> goSp pren t sp <*> go pren u <*> pure q <*> pure i
 
-    ensureIsUppedValid :: PartialRenaming -> IsUpped -> IO ()
-    ensureIsUppedValid pren isu = case (domMrk pren, isu) of
+    -- Every time we see a ↓, we must bind a #
+    enterD :: IsDowned -> PartialRenaming -> PartialRenaming
+    enterD isd pren = ifIsDowned liftMarker isd pren
+
+    -- Every time we see a ↑, we must check that # ∈ Γ
+    encounterU :: PartialRenaming -> IsUpped -> IO ()
+    encounterU pren isu = case (domMrk pren, isu) of
       (Absent, YesUpped) -> throwIO EscapingMarker
       _ -> pure ()
 
     go :: PartialRenaming -> Val -> IO Tm
-    -- go pren t = trace ("Renaming " ++ show t ++ " with pren " ++ show pren) $ case force t of
     go pren t = case force t of
       VFlex isd m' mrk sp
-        | m == m' -> throwIO Occurs -- occurs check
-        | otherwise ->
-            ifIsDowned downS isd
-              <$> goSp (ifIsDowned liftMarker isd pren) (Meta m' mrk) sp
+        | m == m' -> throwIO Occurs
+        | otherwise -> quoteD isd <$> goSp (enterD isd pren) (Meta m' mrk) sp
       VRigid isd isu (Lvl x) sp -> do
-        when (isd == NotDowned) (ensureIsUppedValid pren isu)
+        when (isd == NotDowned) (encounterU pren isu) -- check up arrow validity
         case IM.lookup x (ren pren) of
-          Nothing -> throwIO Escaping -- scope error ("escaping variable" error)
-          Just (x', dir) ->
-            ifIsDowned downS isd
-              <$> goSp
-                (ifIsDowned liftMarker isd pren)
-                (ifIsUpped upS (fromMaybe isu (moveIsUpped <$> dir <*> pure isu)) $ Var (lvl2Ix (dom pren) x'))
-                sp
-      VLam isd x q i t ->
-        ifIsDowned downS isd
-          <$> Lam x q i
-          <$> go
-            ( ifIsDowned
-                liftMarker
-                isd
-                (lift pren)
-            )
-            (t $$ VVar (cod pren) q)
-      VPi isu x q i a b -> do
-        ensureIsUppedValid pren isu
-        ifIsUpped upS isu <$> (Pi x q i <$> go pren a <*> go (lift pren) (b $$ VVar (cod pren) Zero))
-      VU isu -> do
-        ensureIsUppedValid pren isu
-        pure $ ifIsUpped upS isu U
+          Nothing -> throwIO Escaping
+          Just (x', dir) -> do
+            -- Substitute the variable, adjusting for any ↑/↓ differences
+            let newVarIsU = fromMaybe isu (moveIsUpped <$> dir <*> pure isu)
+            quoteD isd <$> goSp (enterD isd pren) (quoteU newVarIsU $ Var (lvl2Ix (dom pren) x')) sp
+      VLam' isd x q i t ->
+        quoteD isd <$> Lam x q i <$> go (enterD isd (lift pren)) (t $$ VVar (cod pren) q)
+      VPi' isu x q i a b -> do
+        encounterU pren isu
+        quoteU isu <$> (Pi x q i <$> go pren a <*> go (lift pren) (b $$ VVar (cod pren) Zero))
+      VU' isu -> do
+        encounterU pren isu
+        pure $ quoteU isu U
 
--- | Wrap a term in lambdas. We need an extra list of Icit-s to
---   match the type of the to-be-solved meta.
 lams :: [(Mode, Icit)] -> Tm -> Tm
 lams = go (0 :: Int)
   where
     go x [] t = t
     go x ((q, i) : is) t = Lam ("x" ++ show (x + 1)) q i $ go (x + 1) is t
 
---       Γ      i        ?α         sp   =? rhs
+-- (For the 'NotDowned' case:)
+-- solve : (Γ : Con) → (m : Meta i Δ) -> # ∈ Δ → Sub Γ Δ → Tm Γ → TC ()
 solve :: Lvl -> MetaVar -> IsDowned -> Marker -> Spine -> Val -> IO ()
 solve gamma m YesDowned mrk@Present sp rhs = solve gamma m NotDowned mrk sp (up rhs)
 solve gamma m YesDowned Absent sp rhs = throwIO MetaSolutionTooWeak
@@ -121,26 +112,21 @@ solve gamma m NotDowned mrk sp rhs = do
   pren <- invert gamma mrk sp
   rhs <- rename m pren rhs
   let solution = eval [] $ lams (reverse $ map (\(_, q, i) -> (q, i)) sp) rhs
-  modifyIORef' mcxt $ IM.insert (unMetaVar m) (Solved solution)
+  modifyIORef' mcxt $ IM.insert (unMetaVar m) (Solved mrk solution)
 
 unifySp :: Lvl -> Spine -> Spine -> IO ()
 unifySp l sp sp' = case (sp, sp') of
   ([], []) -> pure ()
-  -- Note: we don't have to compare Icit-s, since we know from the recursive
-  -- call that sp and sp' have the same type.
-  (sp :> (t, q, _), sp' :> (t', q', _))
-    | q == q' ->
-        unifySp l sp sp' >> unify l t t'
-  _ -> throwIO UnifyError -- rigid mismatch error
+  (sp :> (t, q, _), sp' :> (t', q', _)) | q == q' -> unifySp l sp sp' >> unify l t t'
+  _ -> throwIO UnifyError
 
 unify :: Lvl -> Val -> Val -> IO ()
 unify l t u = case (force t, force u) of
--- unify l t u = trace (">>>>>> unifying " ++ show (force t) ++ " and " ++ show (force u)) $ case (force t, force u) of
-  (VLam _ _ q _ t, VLam _ _ q' _ t') -> unify (l + 1) (t $$ VVar l q) (t' $$ VVar l q')
-  (t, VLam isd _ q i t') -> unify (l + 1) (vApp (ifIsDowned up isd t) (VVar l q) q i) (t' $$ VVar l q)
-  (VLam isd _ q i t, t') -> unify (l + 1) (t $$ VVar l q) (vApp (ifIsDowned up isd t') (VVar l q) q i)
-  (VU _, VU _) -> pure ()
-  (VPi _ x q i a b, VPi isu' x' q' i' a' b')
+  (VLam' _ _ q _ t, VLam' _ _ q' _ t') -> unify (l + 1) (t $$ VVar l q) (t' $$ VVar l q')
+  (t, VLam' isd _ q i t') -> unify (l + 1) (vApp (offsetD isd t) (VVar l q) q i) (t' $$ VVar l q)
+  (VLam' isd _ q i t, t') -> unify (l + 1) (t $$ VVar l q) (vApp (offsetD isd t') (VVar l q) q i)
+  (VU' _, VU' _) -> pure ()
+  (VPi' _ x q i a b, VPi' isu' x' q' i' a' b')
     | q == q' && i == i' -> unify l a a' >> unify (l + 1) (b $$ VVar l Zero) (b' $$ VVar l Zero)
   (VRigid _ _ x sp, VRigid _ _ x' sp')
     | x == x' -> unifySp l sp sp'
@@ -148,4 +134,4 @@ unify l t u = case (force t, force u) of
     | m == m' -> unifySp l sp sp'
   (VFlex isd m mrk sp, t') -> solve l m isd mrk sp t'
   (t, VFlex isd m' mrk sp') -> solve l m' isd mrk sp' t
-  _ -> throwIO UnifyError -- rigid mismatch error
+  _ -> throwIO UnifyError

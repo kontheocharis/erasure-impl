@@ -64,6 +64,8 @@ let 0 Fin : Nat -> U
     → A n;
   ```
   
+  **Warning**: `implicit` still a work-in-progress.
+  
 If you don't care about disparity between the two phases, you should implement
 your language in the way `implicit` does, as it is simpler and perhaps more
 performant. That being said, `explicit` has its merits too: if you want to have

@@ -21,85 +21,82 @@ freshMeta :: Cxt -> Mode -> IO Tm
 freshMeta cxt q = do
   m <- readIORef nextMeta
   writeIORef nextMeta (m + 1)
+  -- Always make a meta in mode ω, but add # to its context if
+  -- possible.
   let isd = case q of
         Omega -> NotDowned
         Zero -> YesDowned
-  modifyIORef' mcxt $ IM.insert m Unsolved
-  pure $ ifIsDowned Down isd (InsertedMeta (MetaVar m) (ifIsDowned (ext Present) isd (marker cxt)) (bds cxt))
+  -- Specifically, # is added if we are asking for a meta in mode 0, or the
+  -- context is already has #.
+  let mrk = ifIsDowned (ext Present) isd (marker cxt)
+  modifyIORef' mcxt $ IM.insert m (Unsolved mrk)
+  pure $ ifIsDowned Down isd (InsertedMeta (MetaVar m) mrk (bds cxt))
 
-evalIn :: Cxt -> Tm -> Val
-evalIn cxt t = eval (env cxt) t
+elabError :: Cxt -> ElabError -> IO a
+elabError cxt e = throwIO $ Error (pos cxt) (ElabError cxt e)
 
 unifyCatch :: Cxt -> Val -> Val -> IO ()
 unifyCatch cxt t t' =
   unify (lvl cxt) t t'
-    `catch` \e -> throwIO $ Error cxt $ CantUnify (quote (lvl cxt) t) (quote (lvl cxt) t') e
+    `catch` \e -> elabError cxt $ CantUnify (quote (lvl cxt) t) (quote (lvl cxt) t') e
 
--- | Insert fresh implicit applications.
 insert' :: Cxt -> IO (Tm, VTy) -> IO (Tm, VTy)
 insert' cxt act = go =<< act
   where
     go (t, va) = case force va of
-      VPi NotUpped x q Impl a b -> do
+      VPi x q Impl a b -> do
         m <- freshMeta cxt q
-        let mv = evalIn cxt m
+        let mv = eval (env cxt) m
         go (App t m q Impl, b $$ mv)
       va -> pure (t, va)
 
--- | Insert fresh implicit applications to a term which is not
---   an implicit lambda (i.e. neutral).
 insert :: Cxt -> IO (Tm, VTy) -> IO (Tm, VTy)
 insert cxt act =
   act >>= \case
     (t@(Lam _ q Impl _), va) -> pure (t, va)
     (t, va) -> insert' cxt (pure (t, va))
 
--- | Insert fresh implicit applications until we hit a Pi with
---   a particular binder name.
 insertUntilName :: Cxt -> Name -> IO (Tm, VTy) -> IO (Tm, VTy)
 insertUntilName cxt name act = go =<< act
   where
     go (t, va) = case force va of
-      va@(VPi NotUpped x q Impl a b) -> do
+      va@(VPi x q Impl a b) -> do
         if x == name
           then
             pure (t, va)
           else do
             m <- freshMeta cxt q
-            let mv = evalIn cxt m
+            let mv = eval (env cxt) m
             go (App t m q Impl, b $$ mv)
-      _ ->
-        throwIO $ Error cxt $ NoNamedImplicitArg name
+      _ -> elabError cxt $ NoNamedImplicitArg name
 
--- Mode given as argument
+-- Check in a given mode
 --
--- types always in mode 0
+-- check : (Γ : Ctx) -> (i : {0, ω}) -> PTm -> Ty Γ -> TC (Tm i A)
+--
+-- By the identification Ty Γ = Tm 0 Γ U, types are always in mode 0.
 checkIn :: Cxt -> Mode -> P.Tm -> VTy -> IO Tm
 checkIn cxt Zero t a = do
-  -- shallow check for mode 0
   t' <- check (enterMarker cxt) t a
   pure (downS t')
 checkIn cxt Omega t a = check cxt t a
 
--- Mode ω
---
--- types always in mode 0
+-- Check in mode ω (default)
 check :: Cxt -> P.Tm -> VTy -> IO Tm
 check cxt t a = case (t, force a) of
   (P.SrcPos pos t, a) ->
     check (cxt {pos = pos}) t a
-  -- If the icitness of the lambda matches the Pi type, check as usual
-  (P.Lam x i t, VPi NotUpped x' q' i' a b) | either (\x -> x == x' && i' == Impl) (== i') i -> do
+  (P.Lam x i t, VPi x' q' i' a b) | either (\x -> x == x' && i' == Impl) (== i') i -> do
+    -- Here we must wrap the variable in ↓ if the q = ω, because of the lambda rule.
     Lam x q' i' <$> check (bind cxt x q' a) t (b $$ VWrappedVar (lvl cxt) (fromZero q'))
-
-  -- Otherwise if Pi is implicit, insert a new implicit lambda
-  (t, VPi NotUpped x q Impl a b) -> do
+  (t, VPi x q Impl a b) -> do
     Lam x q Impl <$> check (newBinder cxt x q a) t (b $$ VWrappedVar (lvl cxt) (fromZero q))
   (P.Let x q a t u, a') -> do
-    a <- checkIn cxt Zero a (VU NotUpped)
-    let ~va = evalIn cxt a
+    -- Types always in mode 0
+    a <- checkIn cxt Zero a VU
+    let ~va = eval (env cxt) a
     t <- checkIn cxt q t va
-    let ~vt = evalIn cxt t
+    let ~vt = eval (env cxt) t
     u <- check (define cxt x q vt va) u a'
     pure (Let x q a t u)
   (P.Hole, a) ->
@@ -125,23 +122,27 @@ infer cxt = \case
   P.Var x -> do
     let go ix (types :> (x', origin, q, a))
           | x == x' && origin == Source = case (marker cxt, q) of
+              -- A variable is usable unless it is mode 0 and the context lacks #
               (Absent, Omega) -> pure (Var ix, a)
-              (Absent, Zero) -> throwIO $ Error cxt $ InsufficientMode
+              (Absent, Zero) -> elabError cxt $ InsufficientMode
               (Present, Omega) -> pure (Var ix, a)
               (Present, Zero) -> pure (Up (Var ix), a)
           | otherwise = go (ix + 1) types
         go ix [] =
-          throwIO $ Error cxt $ NameNotInScope x
-
+          elabError cxt $ NameNotInScope x
     go 0 (types cxt)
   P.Lam x (Right i) t -> do
+    -- By default infer a runtime lambda
     let q = Omega
-    a <- evalIn cxt <$> freshMeta cxt Zero
+    a <- eval (env cxt) <$> freshMeta cxt Zero
     let cxt' = bind cxt x q a
     (t, b) <- insert cxt' $ infer cxt' t
-    pure (Lam x q i t, VPi NotUpped x q i a $ closeVal cxt b (downToZero q))
+    -- When b is instantiated with some term (0 u : A), we might need to wrap it
+    -- in ↑; This is because b is in the context extended by (q x : A), but the
+    -- Π type codomain is over (0 x : A).
+    pure (Lam x q i t, VPi x q i a $ closeVal cxt b (downToZero q))
   P.Lam x Left {} t ->
-    throwIO $ Error cxt $ InferNamedLam
+    elabError cxt $ InferNamedLam
   P.App t u i -> do
     -- choose implicit insertion
     (i, t, tty) <- case i of
@@ -155,42 +156,40 @@ infer cxt = \case
         (t, tty) <- insert' cxt $ infer cxt t
         pure (Expl, t, tty)
 
-    -- ensure that tty is Pi
     (q, a, b) <- case force tty of
-      VPi NotUpped x q i' a b -> do
-        unless (i == i') $
-          throwIO $
-            Error cxt $
-              IcitMismatch i i'
+      VPi x q i' a b -> do
+        unless (i == i') $ elabError cxt $ IcitMismatch i i'
         pure (q, a, b)
       tty -> do
         let q = Omega
-        a <- evalIn cxt <$> freshMeta cxt Zero
+        a <- eval (env cxt) <$> freshMeta cxt Zero
         b <-
           Closure (env cxt)
             <$> freshMeta (bind cxt "x" q a) Zero
             <*> pure (downToZero q)
-        unifyCatch cxt tty (VPi NotUpped "x" q i a b)
+        unifyCatch cxt tty (VPi "x" q i a b)
         pure (q, a, b)
 
     u <- checkIn cxt q u a
-    pure (App t u q i, b $$ evalIn cxt (ifIsDowned Down (downToZero q) u))
+    -- Need to wrap substitution in ↓ if q = ω, because of the application rule.
+    pure (App t u q i, b $$ eval (env cxt) (ifIsDowned Down (downToZero q) u))
+  -- Elaborating types will always require #, because they are only valid in mode 0.
   P.U -> do
-    when (marker cxt /= Present) (throwIO $ Error cxt $ InsufficientMode)
-    pure (Up U, VU NotUpped)
+    when (marker cxt /= Present) (elabError cxt $ InsufficientMode)
+    pure (Up U, VU)
   P.Pi x q i a b -> do
-    when (marker cxt /= Present) (throwIO $ Error cxt $ InsufficientMode)
-    a <- checkIn cxt Zero a (VU NotUpped)
-    b <- checkIn (bind cxt x Zero (evalIn cxt a)) Zero b (VU NotUpped)
-    pure (Up (Pi x q i a b), (VU NotUpped))
+    when (marker cxt /= Present) (elabError cxt $ InsufficientMode)
+    a <- checkIn cxt Zero a VU
+    b <- checkIn (bind cxt x Zero (eval (env cxt) a)) Zero b VU
+    pure (Up (Pi x q i a b), VU)
   P.Let x q a t u -> do
-    a <- checkIn cxt Zero a (VU NotUpped)
-    let ~va = evalIn cxt a
+    a <- checkIn cxt Zero a VU
+    let ~va = eval (env cxt) a
     t <- checkIn cxt q t va
-    let ~vt = evalIn cxt t
+    let ~vt = eval (env cxt) t
     (u, b) <- infer (define cxt x q vt va) u
     pure (Let x q a t u, b)
   P.Hole -> do
-    a <- evalIn cxt <$> freshMeta cxt Zero
+    a <- eval (env cxt) <$> freshMeta cxt Zero
     t <- freshMeta cxt Omega
     pure (t, a)

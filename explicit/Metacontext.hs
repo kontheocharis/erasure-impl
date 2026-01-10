@@ -8,7 +8,7 @@ import Value
 
 --------------------------------------------------------------------------------
 
-data MetaEntry = Solved Val | Unsolved
+data MetaEntry = Solved Marker Val | Unsolved Marker
 
 nextMeta :: IORef Int
 nextMeta = unsafeDupablePerformIO $ newIORef 0
@@ -29,3 +29,11 @@ reset :: IO ()
 reset = do
   writeIORef nextMeta 0
   writeIORef mcxt mempty
+
+anyUnsolved :: IO Bool
+anyUnsolved = do
+  ms <- readIORef mcxt
+  pure $ any isUnsolved (IM.elems ms)
+  where
+    isUnsolved (Unsolved _) = True
+    isUnsolved _ = False

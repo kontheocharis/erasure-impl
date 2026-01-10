@@ -21,7 +21,7 @@ data Cxt = Cxt
     types :: Types, -- raw name lookup, pretty printing
     bds :: [BD], -- fresh meta creation
     pos :: SourcePos, -- error reporting
-    marker :: Marker -- whether `#` erasure marker is present or absent
+    marker :: Marker -- whether # is present or absent
   }
 
 cxtNames :: Cxt -> [Name]
@@ -40,24 +40,25 @@ instance Show Cxt where
 emptyCxt :: SourcePos -> Cxt
 emptyCxt p = Cxt [] 0 [] [] p Absent
 
--- | Extend Cxt with a bound variable.
+-- Γ ↦ Γ, i x : A
 bind :: Cxt -> Name -> Mode -> VTy -> Cxt
 bind (Cxt env l types bds pos md) x q ~a =
   Cxt (env :> VVar l q) (l + 1) (types :> (x, Source, q, a)) (bds :> Bound q) pos md
 
--- | Insert a new binding.
+-- Γ ↦ Γ, i x : A
 newBinder :: Cxt -> Name -> Mode -> VTy -> Cxt
 newBinder (Cxt env l types bds pos md) x q ~a =
   Cxt (env :> VVar l q) (l + 1) (types :> (x, Inserted, q, a)) (bds :> Bound q) pos md
 
--- | Extend Cxt with a definition.
+-- Γ ↦ Γ, i x := t
 define :: Cxt -> Name -> Mode -> Val -> VTy -> Cxt
 define (Cxt env l types bds pos md) x q ~t ~a =
   Cxt (env :> t) (l + 1) (types :> (x, Source, q, a)) (bds :> Defined) pos md
 
--- | closeVal : (Γ : Con) → Val (Γ, x : A) B → Closure Γ A B
+-- | closeVal : (Γ : Con) → Val (Γ, i x : A) B → (whether i should be regarded as 0) → Closure Γ A B
 closeVal :: Cxt -> Val -> IsDowned -> Closure
 closeVal cxt t isd = Closure (env cxt) (quote (lvl cxt + 1) t) isd
 
+-- | Γ ↦ Γ, #
 enterMarker :: Cxt -> Cxt
 enterMarker (Cxt env l types bds pos _) = Cxt env l types bds pos Present

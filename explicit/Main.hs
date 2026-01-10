@@ -29,8 +29,8 @@ showHelp = putStrLn helpMsg >> exitFailure
 
 mainWith :: IO [String] -> IO (P.Tm, String) -> IO ()
 mainWith getOpt getRaw = do
+  (t, file) <- getRaw
   let elab m = do
-        (t, file) <- getRaw
         inferIn (emptyCxt (initialPos file)) m t
           `catch` \e -> (displayError file e >> exitFailure)
 
@@ -58,7 +58,7 @@ mainWith getOpt getRaw = do
       putStrLn $ showTm0 t
     ["ex"] -> do
       (t, a) <- elab Omega
-      let e = extract t
+      e <- extract (initialPos file) t
       putStrLn $ showCode0 e
     _ -> showHelp
 

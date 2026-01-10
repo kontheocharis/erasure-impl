@@ -7,24 +7,34 @@ type Env = [Val]
 
 type Spine = [(Val, Mode, Icit)]
 
-data IsUpped = YesUpped | NotUpped
-  deriving (Eq, Show)
-
-data IsDowned = YesDowned | NotDowned
-  deriving (Eq, Show)
-
-data Closure = Closure Env Tm IsDowned
+data Closure
+  = Closure
+      Env
+      Tm
+      IsDowned -- whether Tm applies an extra ↓ to its argument that we must offset (see Elaboration)
   deriving (Show)
 
 type VTy = Val
 
+-- Each value is marked by whether it is coerced. There is only one possible
+-- coercion per value.
 data Val
   = VFlex IsDowned MetaVar Marker Spine
   | VRigid IsDowned IsUpped Lvl Spine
-  | VLam IsDowned Name Mode Icit {-# UNPACK #-} Closure
-  | VPi IsUpped Name Mode Icit ~VTy {-# UNPACK #-} Closure
-  | VU IsUpped
+  | VLam' IsDowned Name Mode Icit {-# UNPACK #-} Closure
+  | VPi' IsUpped Name Mode Icit ~VTy {-# UNPACK #-} Closure
+  | VU' IsUpped
   deriving (Show)
+
+-- Patterns for uncoerced values
+pattern VLam :: Name -> Mode -> Icit -> Closure -> Val
+pattern VLam x q i t = VLam' NotDowned x q i t
+
+pattern VPi :: Name -> Mode -> Icit -> VTy -> Closure -> Val
+pattern VPi x q i a b = VPi' NotUpped x q i a b
+
+pattern VU :: Val
+pattern VU = VU' NotUpped
 
 -- Pattern for variables x0 or xω
 pattern VVar :: Lvl -> Mode -> Val
@@ -55,34 +65,3 @@ matchVWrappedVar (VRigid YesDowned NotUpped x []) = Just (x, Just Downward)
 matchVWrappedVar (VRigid NotDowned NotUpped x []) = Just (x, Nothing)
 matchVWrappedVar (VRigid NotDowned YesUpped x []) = Just (x, Just Upward)
 matchVWrappedVar _ = Nothing
-
--- Move an IsUpped in a given direction, if possible
-moveIsUpped :: Dir -> IsUpped -> IsUpped
-moveIsUpped Upward NotUpped = YesUpped
-moveIsUpped Upward YesUpped = error "impossible"
-moveIsUpped Downward YesUpped = NotUpped
-moveIsUpped Downward NotUpped = error "impossible"
-
-moveIsDowned :: Dir -> IsDowned -> IsDowned
-moveIsDowned Upward NotDowned = error "impossible"
-moveIsDowned Upward YesDowned = NotDowned
-moveIsDowned Downward NotDowned = YesDowned
-moveIsDowned Downward YesDowned = error "impossible"
-
--- Wrap a type in Up/Down if needed
-ifIsUpped :: (a -> a) -> IsUpped -> a -> a
-ifIsUpped f NotUpped = id
-ifIsUpped f YesUpped = f
-
-ifIsDowned :: (a -> a) -> IsDowned -> a -> a
-ifIsDowned f NotDowned = id
-ifIsDowned f YesDowned = f
-
---
-fromZero :: Mode -> Maybe Dir
-fromZero Zero = Nothing
-fromZero Omega = Just Upward
-
-downToZero :: Mode -> IsDowned
-downToZero Zero = NotDowned
-downToZero Omega = YesDowned

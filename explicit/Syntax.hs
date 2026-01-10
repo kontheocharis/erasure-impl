@@ -17,6 +17,8 @@ data Tm
   | Down Tm
   deriving (Show)
 
+-- Shallowly eliminate Up and Down constructors:
+
 downS :: Tm -> Tm
 downS (Up t) = t
 downS t = Down t
