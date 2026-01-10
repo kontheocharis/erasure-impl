@@ -16,7 +16,7 @@ In standard dependent type theory, a pattern unification problem has the form:
 ```
 
 where `Γ, Δ : Con`, `σ : Sub Γ Δ`, `t : Tm Γ A[σ]`, and `?m : Tm Δ A` is the
-(neutral) hole we want to solve for. We can think of `Δ` as the context in which
+hole we want to solve for. We can think of `Δ` as the context in which
 the metavariable is created, and `Γ` as the context in which a solution is being
 attempted.
 
@@ -85,7 +85,7 @@ A pattern unification problem now looks the same as before
 ```
 
 where `Γ, Δ : Con`, `σ : Sub Γ Δ`, `t : Tm ω Γ A[σ]`, and `?m : Tm ω Δ A` is the
-(neutral) hole we want to solve for.
+ hole we want to solve for.
 
 For a solution, we must have the same conditions as before:
 
@@ -100,8 +100,8 @@ now a contain a witness of `#`. For example,
 ```
 is a valid linear renaming.
 
-Annoyingly, there are some problems that do not fall under these conditions
-but that appear quite often. Consider the spine
+There are some problems that do not fall under these conditions but that might
+appear quite often. Consider the spine
 ```
 (p, x). (p, ↑x) : Sub (∙ ▷ # ▷[0] A) (∙ ▷ # ▷[ω] A)
 ```
@@ -119,8 +119,8 @@ Given this, we can refine the spine condition (1) to be:
 1. `σ` is a linear renaming *up to mode shifts*: it consists only of distinct
   variables in `Γ` potentially wrapped in `↑` or `↓`.
 
-These renamings are still epimorphisms, and it is possible to invert them
-into partial substitutions.
+These renamings are still epimorphisms (mode shifts form an iso), and it is
+possible to invert them into partial 'generalised' renamings.
 
 ### Optimising the representation of `#`
 
@@ -134,25 +134,18 @@ To decide if a spine `σ` meets the condition (1), it is sufficient to check tha
 it contains only distinct variables up to `↑/↓`.
 
 To decide if a term `t` meets condition (2), we must also check that if `Δ` does
-not contain `#` then `t` must not contain any `↑` coercions (unless they are
-nested under `↓`). 
+not contain `#` then `t` does not contain any `↑` coercions, or anything else
+depending on `#` (unless nested under `↓`).
 
 Besides that, the implementation depends on if we choose to include the mode
 shifts as part of the syntax in the compiler. We implement both approaches
 in this repository.
 
-### If mode shifts are part of the compiler syntax (`explicit`)
+*If mode shifts are part of the compiler syntax (`explicit`)*, we can decide
+condition 2 just by looking at the `↑`/`↓` wrappers in the spine `σ`.
 
-We can decide condition 2 just by looking at the `↑`/`↓` wrappers in the spine
-`σ`. We don't need to know the mode of any variable for unification, only for
-typechecking. Regardless, we keep track of the declared modes of variables in
-the syntax itself. This is technically not necessary but allows us to have a few
-more asserts to ensure the behaviour of mode shifting is correct.
-
-### If mode shifts aren't part of the compiler syntax (`implicit`)
-
-We must record the *modes* of all bindings for each metavariable context. We can
-then compare them to the modes of the variables in the spine `σ` to check
-condition 2. This means we need access to the context's mode bindings during
-unification. Alternatively, we can choose to remember variable modes in the
-syntax itself. We choose the latter.
+*If mode shifts aren't part of the compiler syntax (`implicit`)*, we must record
+the *modes* of all bindings for each metavariable context. We can then compare
+them to the modes of the variables in the spine `σ` to check condition 2. This
+means we need access to the context's mode bindings during unification.
+Alternatively, we can choose to remember variable modes in the syntax itself.

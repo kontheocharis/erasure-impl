@@ -66,11 +66,13 @@ let 0 Fin : Nat -> U
   
   **Warning**: `implicit` still a work-in-progress.
   
+### Discussion
+  
 If you don't care about disparity between the two phases, you should implement
 your language in the way `implicit` does, as it is simpler and perhaps more
 performant. That being said, `explicit` has its merits too: if you want to have
 things in the runtime phase that collapse in the compile-time phase, then you
-need explicit coercions. (More on that soon!)
+need explicit coercions. (More on that soon)
 
 I have not measured it yet but the performance gap should be negligible because
 there is no deep traversal happening during eval/quote and the value
@@ -79,4 +81,7 @@ representation of coercions is quite efficient.
 There is also a code extraction capability invoked with the `ex` flag, that spits
 out untyped lambda calculus terms, removing all erased/compile-time data.
 
-This can be directly combined with 2LTT approaches.
+Erasure in this style can (in theory) be directly combined with 2LTT approaches.
+
+There is also an [explanation](./notes/pattern-unification.md) about how to do
+pattern unification in this system.
