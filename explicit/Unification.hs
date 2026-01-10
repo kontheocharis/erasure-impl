@@ -134,8 +134,8 @@ unifySp l sp sp' = case (sp, sp') of
   _ -> throwIO UnifyError -- rigid mismatch error
 
 unify :: Lvl -> Val -> Val -> IO ()
--- unify l t u = case (force t, force u) of
-unify l t u = trace (">>>>>> unifying " ++ show (force t) ++ " and " ++ show (force u)) $ case (force t, force u) of
+unify l t u = case (force t, force u) of
+-- unify l t u = trace (">>>>>> unifying " ++ show (force t) ++ " and " ++ show (force u)) $ case (force t, force u) of
   (VLam _ _ q _ t, VLam _ _ q' _ t') -> unify (l + 1) (t $$ VVar l q) (t' $$ VVar l q')
   (t, VLam isd _ q i t') -> unify (l + 1) (vApp (ifIsDowned up isd t) (VVar l q) q i) (t' $$ VVar l q)
   (VLam isd _ q i t, t') -> unify (l + 1) (t $$ VVar l q) (vApp (ifIsDowned up isd t') (VVar l q) q i)
