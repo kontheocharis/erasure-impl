@@ -6,6 +6,7 @@ import Control.Monad (when)
 import Data.IORef
 import qualified Data.IntMap as IM
 import Data.Maybe (fromMaybe)
+import Debug.Trace (trace)
 import Errors
 import Evaluation
 import Metacontext
@@ -47,8 +48,11 @@ invert gamma mrk sp = do
       go (sp :> (t, _, _)) = do
         (dom, ren) <- go sp
         case force t of
-          VWrappedVar (Lvl x) d | IM.notMember x ren -> pure (dom + 1, IM.insert x (dom, invertDir <$> d) ren)
-          _ -> throwIO UnifyError
+          VWrappedVar (Lvl x) d ->
+            if IM.notMember x ren
+              then pure (dom + 1, IM.insert x (dom, invertDir <$> d) ren)
+              else throwIO InversionNonLinear
+          _ -> throwIO InversionNonVariables
 
   (dom, ren) <- go sp
   pure $ PRen dom gamma mrk ren
@@ -63,21 +67,21 @@ rename m pren v = go pren v
 
     ensureIsUppedValid :: PartialRenaming -> IsUpped -> IO ()
     ensureIsUppedValid pren isu = case (domMrk pren, isu) of
-      (Absent, YesUpped) -> throwIO MetaSolutionTooWeak
+      (Absent, YesUpped) -> throwIO EscapingMarker
       _ -> pure ()
 
     go :: PartialRenaming -> Val -> IO Tm
     -- go pren t = trace ("Renaming " ++ show t ++ " with pren " ++ show pren) $ case force t of
     go pren t = case force t of
       VFlex isd m' mrk sp
-        | m == m' -> throwIO UnifyError -- occurs check
+        | m == m' -> throwIO Occurs -- occurs check
         | otherwise ->
             ifIsDowned downS isd
               <$> goSp (ifIsDowned liftMarker isd pren) (Meta m' mrk) sp
       VRigid isd isu (Lvl x) sp -> do
         when (isd == NotDowned) (ensureIsUppedValid pren isu)
         case IM.lookup x (ren pren) of
-          Nothing -> throwIO UnifyError -- scope error ("escaping variable" error)
+          Nothing -> throwIO Escaping -- scope error ("escaping variable" error)
           Just (x', dir) ->
             ifIsDowned downS isd
               <$> goSp
@@ -130,8 +134,8 @@ unifySp l sp sp' = case (sp, sp') of
   _ -> throwIO UnifyError -- rigid mismatch error
 
 unify :: Lvl -> Val -> Val -> IO ()
-unify l t u = case (force t, force u) of
-  -- unify lmrk l t u = trace (">>>>>> unifying " ++ show (force t) ++ " and " ++ show (force u) ++ " at level " ++ show l ++ " with marker " ++ show lmrk) $ case (force t, force u) of
+-- unify l t u = case (force t, force u) of
+unify l t u = trace (">>>>>> unifying " ++ show (force t) ++ " and " ++ show (force u)) $ case (force t, force u) of
   (VLam _ _ q _ t, VLam _ _ q' _ t') -> unify (l + 1) (t $$ VVar l q) (t' $$ VVar l q')
   (t, VLam isd _ q i t') -> unify (l + 1) (vApp (ifIsDowned up isd t) (VVar l q) q i) (t' $$ VVar l q)
   (VLam isd _ q i t, t') -> unify (l + 1) (t $$ VVar l q) (vApp (ifIsDowned up isd t') (VVar l q) q i)

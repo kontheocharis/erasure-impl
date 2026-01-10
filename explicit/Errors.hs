@@ -8,7 +8,14 @@ import Text.Printf
 
 --------------------------------------------------------------------------------
 
-data UnifyError = UnifyError | MetaSolutionTooWeak
+data UnifyError
+  = Escaping
+  | Occurs
+  | UnifyError
+  | EscapingMarker
+  | MetaSolutionTooWeak
+  | InversionNonVariables
+  | InversionNonLinear
   deriving (Show, Exception)
 
 data ElabError
@@ -41,7 +48,12 @@ displayError file (Error cxt e) = do
               ++ showTm cxt t'
               ++ case ue of
                 UnifyError -> ""
-                MetaSolutionTooWeak -> " (meta solution too weak)."
+                MetaSolutionTooWeak -> "\n\n(meta solution too weak)"
+                Escaping -> "\n\n(escaping variable)"
+                Occurs -> "\n\n(occurs check failed)"
+                EscapingMarker -> "\n\n(escaping erasure marker)"
+                InversionNonVariables -> "\n\n(spine inversion failed due to non-variable)"
+                InversionNonLinear -> "\n\n(spine inversion failed due to non-linear use of variables)"
           )
         InferNamedLam ->
           "Cannot infer type for lambda with named argument"
