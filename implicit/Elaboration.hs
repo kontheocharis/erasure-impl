@@ -28,8 +28,8 @@ freshMeta cxt q = do
   -- context is already has #.
   let mrk =
         marker cxt & case q of
-          Omega -> ext Present
-          Zero -> id
+          Zero -> ext Present
+          Omega -> id
   modifyIORef' mcxt $ IM.insert m (Unsolved mrk)
   pure $ (InsertedMeta (MetaVar m) mrk (bds cxt))
 

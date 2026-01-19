@@ -79,7 +79,9 @@ rename m pren v = go pren v
     go pren t = case force t of
       VFlex isd m' mrk sp
         | m == m' -> throwIO Occurs
-        | otherwise -> quoteD isd <$> goSp (enterD isd pren) (Meta m' mrk) sp
+        | otherwise -> do
+            when (mrk == Present) (encounterU (enterD isd pren) YesUpped)
+            quoteD isd <$> goSp (enterD isd pren) (Meta m' mrk) sp
       VRigid isd isu (Lvl x) sp -> do
         when (isd == NotDowned) (encounterU pren isu) -- check up arrow validity
         case IM.lookup x (ren pren) of
