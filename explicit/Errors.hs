@@ -13,7 +13,6 @@ data UnifyError
   | Occurs
   | UnifyError
   | EscapingMarker
-  | MetaSolutionTooWeak
   | InversionNonVariables
   | InversionNonLinear
   deriving (Show, Exception)
@@ -59,7 +58,6 @@ displayError file (Error ps e) = do
                 ++ showTm cxt t'
                 ++ case ue of
                   UnifyError -> ""
-                  MetaSolutionTooWeak -> "\n\n(meta solution too weak)"
                   Escaping -> "\n\n(escaping variable)"
                   Occurs -> "\n\n(occurs check failed)"
                   EscapingMarker -> "\n\n(escaping erasure marker)"

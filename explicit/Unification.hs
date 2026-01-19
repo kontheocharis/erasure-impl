@@ -106,8 +106,7 @@ lams = go (0 :: Int)
 -- (For the 'NotDowned' case:)
 -- solve : (Γ : Con) → (m : Meta i Δ) -> # ∈ Δ → Sub Γ Δ → Tm Γ → TC ()
 solve :: Lvl -> MetaVar -> IsDowned -> Marker -> Spine -> Val -> IO ()
-solve gamma m YesDowned mrk@Present sp rhs = solve gamma m NotDowned mrk sp (up rhs)
-solve gamma m YesDowned Absent sp rhs = throwIO MetaSolutionTooWeak
+solve gamma m YesDowned mrk sp rhs = solve gamma m NotDowned mrk sp (up rhs)
 solve gamma m NotDowned mrk sp rhs = do
   pren <- invert gamma mrk sp
   rhs <- rename m pren rhs
