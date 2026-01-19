@@ -21,8 +21,6 @@ fresh ns x
 -- printing precedences
 atomp = 4 :: Int -- U, var
 
-coerp = 2 :: Int -- coercions (up, down)
-
 appp = 3 :: Int -- application
 
 pip = 1 :: Int -- pi

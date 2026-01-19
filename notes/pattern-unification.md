@@ -142,10 +142,11 @@ shifts as part of the syntax in the compiler. We implement both approaches
 in this repository.
 
 *If mode shifts are part of the compiler syntax (`explicit`)*, we can decide
-condition 2 just by looking at the `↑`/`↓` wrappers in the spine `σ`.
+condition 2 by traversing `t` and remembering when we encounter `↑`/`↓`; a
+`↑` counts as a usage of `#` and `↓` adds `#` to the context.
 
-*If mode shifts aren't part of the compiler syntax (`implicit`)*, we must record
-the *modes* of all bindings for each metavariable context. We can then compare
-them to the modes of the variables in the spine `σ` to check condition 2. This
-means we need access to the context's mode bindings during unification.
-Alternatively, we can choose to remember variable modes in the syntax itself.
+*If mode shifts aren't part of the compiler syntax (`implicit`)*, we can instead
+look at where erased terms appear in the syntax. Every time we find an erased
+application, it counts as a usage of `↓`, and every time we find a type or a
+variable whose mode is 0, it counts as a usage of `↑`. For this, we need to
+remember variable modes in the syntax itself.

@@ -5,7 +5,6 @@ import Control.Exception
 import Control.Monad (when)
 import Data.IORef
 import qualified Data.IntMap as IM
-import Data.Maybe (fromMaybe)
 import Errors
 import Evaluation
 import Metacontext
