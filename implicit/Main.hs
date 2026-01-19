@@ -29,8 +29,8 @@ showHelp = putStrLn helpMsg >> exitFailure
 
 mainWith :: IO [String] -> IO (P.Tm, String) -> IO ()
 mainWith getOpt getRaw = do
+  (t, file) <- getRaw
   let elab m = do
-        (t, file) <- getRaw
         inferIn (emptyCxt (initialPos file)) m t
           `catch` \e -> (displayError file e >> exitFailure)
 
@@ -44,7 +44,7 @@ mainWith getOpt getRaw = do
     ['n' : 'f' : optMode] -> do
       q <- parseMode optMode
       (t, a) <- elab q
-      putStrLn $ showTm0 $ nf [] t
+      putStrLn $ showTm0 $ nf (getMarker q) [] t
       putStrLn "  :"
       putStrLn $ showTm0 $ quote 0 a
     ['t' : 'y' : 'p' : 'e' : optMode] -> do
@@ -56,10 +56,9 @@ mainWith getOpt getRaw = do
       (t, a) <- elab q
       displayMetas
       putStrLn $ showTm0 t
-    ['e' : 'x' : optMode] -> do
-      q <- parseMode optMode
-      (t, a) <- elab q
-      let e = extract t
+    ["ex"] -> do
+      (t, a) <- elab Omega
+      e <- extract (initialPos file) t
       putStrLn $ showCode0 e
     _ -> showHelp
 

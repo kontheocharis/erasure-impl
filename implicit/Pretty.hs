@@ -21,6 +21,8 @@ fresh ns x
 -- printing precedences
 atomp = 4 :: Int -- U, var
 
+coerp = 2 :: Int -- coercions (up, down)
+
 appp = 3 :: Int -- application
 
 pip = 1 :: Int -- pi
@@ -93,9 +95,13 @@ displayMetas :: IO ()
 displayMetas = do
   ms <- readIORef mcxt
   forM_ (IM.toList ms) $ \(m, e) -> case e of
-    Unsolved _ q -> printf "let %s ?%s = ?;\n" (show q) (show m)
-    Solved q v -> printf "let %s ?%s = %s;\n" (show q) (show m) (showTm0 $ quote 0 v)
+    Unsolved mrk -> printf "let ?%s = %s?;\n" (show m) (printMarker mrk)
+    Solved mrk v -> printf "let ?%s = %s%s;\n" (show m) (printMarker mrk) (showTm0 $ quote 0 v)
   putStrLn ""
+  where
+    printMarker :: Marker -> String
+    printMarker Absent = ""
+    printMarker Present = "λ{#}. "
 
 prettyCode :: Int -> [Name] -> Code -> ShowS
 prettyCode prec = go prec

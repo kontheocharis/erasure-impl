@@ -1,4 +1,15 @@
-module Evaluation (($$), quote, eval, nf, tryForce, force, ix2Lvl, lvl2Ix, vApp) where
+module Evaluation
+  ( ($$),
+    quote,
+    eval,
+    nf,
+    tryForce,
+    force,
+    ix2Lvl,
+    lvl2Ix,
+    vApp,
+  )
+where
 
 import Common
 import Data.Maybe (fromMaybe)
@@ -14,8 +25,8 @@ infixl 8 $$
 vApp :: Val -> Val -> Mode -> Icit -> Val
 vApp t ~u q i = case t of
   VLam _ _ _ t -> t $$ u
-  VFlex m q' sp -> VFlex m q' (sp :> (u, q, i))
-  VRigid x q' sp -> VRigid x q' (sp :> (u, q, i))
+  VFlex m mrk sp -> VFlex m mrk (sp :> (u, q, i))
+  VRigid x md sp -> VRigid x md (sp :> (u, q, i))
   _ -> error "impossible"
 
 vAppSp :: Val -> Spine -> Val
@@ -23,10 +34,10 @@ vAppSp t = \case
   [] -> t
   sp :> (u, q, i) -> vApp (vAppSp t sp) u q i
 
-vMeta :: MetaVar -> Val
-vMeta m = case lookupMeta m of
+vMeta :: MetaVar -> Marker -> Val
+vMeta m mrk = case lookupMeta m of
   Solved _ v -> v
-  Unsolved _ q -> VMeta m q
+  Unsolved _ -> VMeta m mrk
 
 vAppBDs :: Env -> Val -> [BD] -> Val
 vAppBDs env ~v bds = case (env, bds) of
@@ -36,7 +47,6 @@ vAppBDs env ~v bds = case (env, bds) of
   _ -> error "impossible"
 
 eval :: Env -> Tm -> Val
--- eval env t = trace (">>>>>> evaluating " ++ show t ++ " at " ++ show env) $ case t of
 eval env t = case t of
   Var x _ -> env !! unIx x
   App t u q i -> vApp (eval env t) (eval env u) q i
@@ -44,14 +54,14 @@ eval env t = case t of
   Pi x q i a b -> VPi x q i (eval env a) (Closure env b)
   Let _ _ _ t u -> eval (env :> eval env t) u
   U -> VU
-  Meta m q -> vMeta m
-  InsertedMeta m _ bds -> vAppBDs env (vMeta m) bds
+  Meta m mrk -> vMeta m mrk
+  InsertedMeta m mrk bds -> vAppBDs env (vMeta m mrk) bds
 
 tryForce :: Val -> Maybe Val
-tryForce = \case
-  VFlex m _ sp -> case lookupMeta m of
+tryForce v = case v of
+  VFlex m mrk sp -> case lookupMeta m of
     Solved _ t -> tryForce (vAppSp t sp)
-    Unsolved _ _ -> Nothing
+    Unsolved _ -> Nothing
   t -> Just t
 
 force :: Val -> Val
@@ -70,11 +80,11 @@ quoteSp l t = \case
 
 quote :: Lvl -> Val -> Tm
 quote l t = case force t of
-  VFlex m q sp -> quoteSp l (Meta m q) sp
-  VRigid x q sp -> quoteSp l (Var (lvl2Ix l x) q) sp
+  VFlex m mrk sp -> quoteSp l (Meta m mrk) sp
+  VRigid x md sp -> quoteSp l (Var (lvl2Ix l x) md) sp
   VLam x q i t -> Lam x q i (quote (l + 1) (t $$ VVar l q))
   VPi x q i a b -> Pi x q i (quote l a) (quote (l + 1) (b $$ VVar l Zero))
   VU -> U
 
-nf :: Env -> Tm -> Tm
-nf env t = quote (Lvl (length env)) (eval env t)
+nf :: Marker -> Env -> Tm -> Tm
+nf mrk env t = quote (Lvl (length env)) (eval env t)

@@ -11,19 +11,24 @@ import Text.Megaparsec
 
 type Name = String
 
+-- Annotates terms and binders
+-- i ∈ {0, ω}
 data Mode = Zero | Omega deriving (Eq)
 
-mult :: Mode -> Mode -> Mode
-mult Zero _ = Zero
-mult _ Zero = Zero
-mult Omega Omega = Omega
+-- Erasure marker (#), appears in contexts:
+-- Tm ω (Γ, #) ≃ Tm 0 Γ
+data Marker = Present | Absent deriving (Eq, Show)
 
-leq :: Mode -> Mode -> Bool
-leq Zero _ = True
-leq Omega Omega = True
-leq _ _ = False
+ext :: Marker -> Marker -> Marker
+ext Present _ = Present
+ext _ Present = Present
+ext Absent Absent = Absent
 
-data Dir = Upward | Downward deriving (Eq, Show)
+getMarker :: Mode -> Marker
+getMarker Zero = Present
+getMarker Omega = Absent
+
+----
 
 data Icit = Impl | Expl deriving (Eq)
 

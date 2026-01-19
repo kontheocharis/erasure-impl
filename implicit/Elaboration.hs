@@ -4,6 +4,7 @@ import Common
 import Control.Exception
 import Control.Monad
 import Cxt
+import Data.Function ((&))
 import Data.IORef
 import qualified Data.IntMap as IM
 import Errors
@@ -21,21 +22,25 @@ freshMeta :: Cxt -> Mode -> IO Tm
 freshMeta cxt q = do
   m <- readIORef nextMeta
   writeIORef nextMeta (m + 1)
-  let metaMd = case (md cxt, q) of
-        (Zero, Omega) -> Zero
-        (Omega, Zero) -> Zero
-        (Zero, Zero) -> Zero
-        (Omega, Omega) -> Omega
-  let mds = modes cxt
-  modifyIORef' mcxt $ IM.insert m (Unsolved mds metaMd)
-  pure $ InsertedMeta (MetaVar m) metaMd (bds cxt)
+  -- Always make a meta in mode ω, but add # to its context if
+  -- possible.
+  -- Specifically, # is added if we are asking for a meta in mode 0, or the
+  -- context is already has #.
+  let mrk =
+        marker cxt & case q of
+          Omega -> ext Present
+          Zero -> id
+  modifyIORef' mcxt $ IM.insert m (Unsolved mrk)
+  pure $ (InsertedMeta (MetaVar m) mrk (bds cxt))
+
+elabError :: Cxt -> ElabError -> IO a
+elabError cxt e = throwIO $ Error (pos cxt) (ElabError cxt e)
 
 unifyCatch :: Cxt -> Val -> Val -> IO ()
 unifyCatch cxt t t' =
-  unify (md cxt) (lvl cxt) t t'
-    `catch` \e -> throwIO $ Error cxt $ CantUnify (quote (lvl cxt) t) (quote (lvl cxt) t') e
+  unify (lvl cxt) t t'
+    `catch` \e -> elabError cxt $ CantUnify (quote (lvl cxt) t) (quote (lvl cxt) t') e
 
--- | Insert fresh implicit applications.
 insert' :: Cxt -> IO (Tm, VTy) -> IO (Tm, VTy)
 insert' cxt act = go =<< act
   where
@@ -46,16 +51,12 @@ insert' cxt act = go =<< act
         go (App t m q Impl, b $$ mv)
       va -> pure (t, va)
 
--- | Insert fresh implicit applications to a term which is not
---   an implicit lambda (i.e. neutral).
 insert :: Cxt -> IO (Tm, VTy) -> IO (Tm, VTy)
 insert cxt act =
   act >>= \case
     (t@(Lam _ q Impl _), va) -> pure (t, va)
     (t, va) -> insert' cxt (pure (t, va))
 
--- | Insert fresh implicit applications until we hit a Pi with
---   a particular binder name.
 insertUntilName :: Cxt -> Name -> IO (Tm, VTy) -> IO (Tm, VTy)
 insertUntilName cxt name act = go =<< act
   where
@@ -68,31 +69,29 @@ insertUntilName cxt name act = go =<< act
             m <- freshMeta cxt q
             let mv = eval (env cxt) m
             go (App t m q Impl, b $$ mv)
-      _ ->
-        throwIO $ Error cxt $ NoNamedImplicitArg name
+      _ -> elabError cxt $ NoNamedImplicitArg name
 
--- Mode given as argument
+-- Check in a given mode
 --
--- types always in mode 0
+-- check : (Γ : Ctx) -> (i : {0, ω}) -> PTm -> Ty Γ -> TC (Tm i A)
+--
+-- By the identification Ty Γ = Tm 0 Γ U, types are always in mode 0.
 checkIn :: Cxt -> Mode -> P.Tm -> VTy -> IO Tm
-checkIn cxt Zero t a = check (enter cxt Zero) t a
+checkIn cxt Zero t a = check (enterMarker cxt) t a
 checkIn cxt Omega t a = check cxt t a
 
--- Mode ω
---
--- types always in mode 0
+-- Check in mode ω (default)
 check :: Cxt -> P.Tm -> VTy -> IO Tm
 check cxt t a = case (t, force a) of
   (P.SrcPos pos t, a) ->
     check (cxt {pos = pos}) t a
-  -- If the icitness of the lambda matches the Pi type, check as usual
   (P.Lam x i t, VPi x' q' i' a b) | either (\x -> x == x' && i' == Impl) (== i') i -> do
-    Lam x q' i' <$> check (bind cxt x q' a) t (b $$ VVar (lvl cxt) Zero)
-
-  -- Otherwise if Pi is implicit, insert a new implicit lambda
+    -- Here we must wrap the variable in ↓ if the q = ω, because of the lambda rule.
+    Lam x q' i' <$> check (bind cxt x q' a) t (b $$ VVar (lvl cxt) q')
   (t, VPi x q Impl a b) -> do
-    Lam x q Impl <$> check (newBinder cxt x q a) t (b $$ VVar (lvl cxt) Zero)
+    Lam x q Impl <$> check (newBinder cxt x q a) t (b $$ VVar (lvl cxt) q)
   (P.Let x q a t u, a') -> do
+    -- Types always in mode 0
     a <- checkIn cxt Zero a VU
     let ~va = eval (env cxt) a
     t <- checkIn cxt q t va
@@ -107,7 +106,7 @@ check cxt t a = case (t, force a) of
     pure t
 
 inferIn :: Cxt -> Mode -> P.Tm -> IO (Tm, VTy)
-inferIn cxt Zero t = infer (enter cxt Zero) t
+inferIn cxt Zero t = infer (enterMarker cxt) t
 inferIn cxt Omega t = infer cxt t
 
 -- Mode ω
@@ -118,25 +117,29 @@ infer cxt = \case
   P.SrcPos pos t ->
     infer (cxt {pos = pos}) t
   P.Var x -> do
-    let go ix (types :> (x', origin, a)) (modes :> q)
-          | x == x' && origin == Source = case (md cxt, q) of
-              (Omega, Omega) -> pure (Var ix q, a)
-              (Omega, Zero) -> throwIO $ Error cxt $ InsufficientMode
-              (Zero, Omega) -> pure (Var ix q, a)
-              (Zero, Zero) -> pure (Var ix q, a)
-          | otherwise = go (ix + 1) types modes
-        go ix [] [] = throwIO $ Error cxt $ NameNotInScope x
-        go ix _ _ = error "unreachable"
-
-    go 0 (types cxt) (modes cxt)
+    let go ix (types :> (x', origin, q, a))
+          | x == x' && origin == Source = case (marker cxt, q) of
+              -- A variable is usable unless it is mode 0 and the context lacks #
+              (Absent, Omega) -> pure (Var ix q, a)
+              (Absent, Zero) -> elabError cxt $ InsufficientMode
+              (Present, Omega) -> pure (Var ix q, a)
+              (Present, Zero) -> pure (Var ix q, a)
+          | otherwise = go (ix + 1) types
+        go ix [] =
+          elabError cxt $ NameNotInScope x
+    go 0 (types cxt)
   P.Lam x (Right i) t -> do
+    -- By default infer a runtime lambda
     let q = Omega
     a <- eval (env cxt) <$> freshMeta cxt Zero
     let cxt' = bind cxt x q a
     (t, b) <- insert cxt' $ infer cxt' t
+    -- When b is instantiated with some term (0 u : A), we might need to wrap it
+    -- in ↑; This is because b is in the context extended by (q x : A), but the
+    -- Π type codomain is over (0 x : A).
     pure (Lam x q i t, VPi x q i a $ closeVal cxt b)
   P.Lam x Left {} t ->
-    throwIO $ Error cxt $ InferNamedLam
+    elabError cxt $ InferNamedLam
   P.App t u i -> do
     -- choose implicit insertion
     (i, t, tty) <- case i of
@@ -150,13 +153,9 @@ infer cxt = \case
         (t, tty) <- insert' cxt $ infer cxt t
         pure (Expl, t, tty)
 
-    -- ensure that tty is Pi
     (q, a, b) <- case force tty of
       VPi x q i' a b -> do
-        unless (i == i') $
-          throwIO $
-            Error cxt $
-              IcitMismatch i i'
+        unless (i == i') $ elabError cxt $ IcitMismatch i i'
         pure (q, a, b)
       tty -> do
         let q = Omega
@@ -166,14 +165,16 @@ infer cxt = \case
         pure (q, a, b)
 
     u <- checkIn cxt q u a
+    -- Need to wrap substitution in ↓ if q = ω, because of the application rule.
     pure (App t u q i, b $$ eval (env cxt) u)
+  -- Elaborating types will always require #, because they are only valid in mode 0.
   P.U -> do
-    when (md cxt /= Zero) (throwIO $ Error cxt $ InsufficientMode)
+    when (marker cxt /= Present) (elabError cxt $ InsufficientMode)
     pure (U, VU)
   P.Pi x q i a b -> do
-    when (md cxt /= Zero) (throwIO $ Error cxt $ InsufficientMode)
-    a <- checkIn cxt Zero a (VU)
-    b <- checkIn (bind cxt x Zero (eval (env cxt) a)) Zero b (VU)
+    when (marker cxt /= Present) (elabError cxt $ InsufficientMode)
+    a <- checkIn cxt Zero a VU
+    b <- checkIn (bind cxt x Zero (eval (env cxt) a)) Zero b VU
     pure (Pi x q i a b, VU)
   P.Let x q a t u -> do
     a <- checkIn cxt Zero a VU

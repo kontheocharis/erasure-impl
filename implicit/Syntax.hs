@@ -11,6 +11,6 @@ data Tm
   | U
   | Pi Name Mode Icit Ty Ty
   | Let Name Mode Ty Tm Tm
-  | Meta MetaVar Mode
-  | InsertedMeta MetaVar Mode [BD]
+  | Meta MetaVar Marker
+  | InsertedMeta MetaVar Marker [BD]
   deriving (Show)
