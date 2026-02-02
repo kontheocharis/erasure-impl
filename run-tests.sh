@@ -1,10 +1,11 @@
 #!/bin/bash
 
 IMPLS=($(stack exec which explicit) $(stack exec which implicit))
-PASS=0
-FAIL=0
 
 for i in "${IMPLS[@]}"; do
+    PASS=0
+    FAIL=0
+
     echo "Running tests with implementation: $i"
     IMPL=$i
     for f in test/bad/*.er; do

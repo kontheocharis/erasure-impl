@@ -11,6 +11,8 @@ let 0 Fin : Nat -> U
 let fzero : {0 k : Nat} -> Fin (succ k)
   = \A fz fs. fz;
 
+-- Idris solves this meta when it shouldn't:
+-- https://github.com/idris-lang/Idris2/issues/3680
 let foo : (0 bang : Nat -> Nat) -> Nat -> Nat = \bang n. _;
 let bar : (0 bang : Nat -> Nat) -> (n : Nat) -> Fin (foo bang n)
   = \bang n. fzero {k = bang n};

@@ -9,3 +9,9 @@ let bing : (0 badd : {0 A : U} -> A -> A) -> _ = \badd. (
 
 bing
 
+
+id U ((x : U) -> U)
+
+
+
+id : (0 A : U) -> A -> A
