@@ -1,10 +1,10 @@
 name: erasure-impl
 version: 0.1.0.0
-github: "Constantine-Theocharis/erasure-impl"
+github: "anon"
 license: BSD3
-author: "András Kovács, Constantine Theocharis"
-maintainer: "Constantine Theocharis"
-copyright: "2019 András Kovács, 2025 Constantine Theocharis"
+author: "András Kovács, Anonymous Authors"
+maintainer: "Anonymous Authors"
+copyright: "2019 András Kovács, 2025 Anonymous Authors"
 category: Language
 
 description: "Implementations of elaboration for type theory with erasure"
