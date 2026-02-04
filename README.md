@@ -51,8 +51,7 @@ let 0 Fin : Nat -> U
   This means we see exactly when we use a term in a mode other than the one it is
   inherently from.
 
-- `implicit`: this does not include explicit coercions; this is possible only
-  when the runtime and erased languages are the same. It is much closer to the
+- `implicit`: this does not include explicit coercions; it is much closer to the
   way Idris2 or Agda implement erasure (QTT). The output looks very close to the input.
   `Fin` becomes
   
