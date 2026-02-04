@@ -1,6 +1,6 @@
 name: erasure-impl
 version: 0.1.0.0
-github: "Constantine-Theocharis/erasure-impl"
+github: "kontheocharis/erasure-impl"
 license: BSD3
 author: "András Kovács, Constantine Theocharis"
 maintainer: "Constantine Theocharis"
