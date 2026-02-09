@@ -63,7 +63,7 @@ let 0 Fin : Nat -> U
     → A n;
   ```
   
-  **Warning**: `implicit` still a work-in-progress.
+  
   
 ### Discussion
 
