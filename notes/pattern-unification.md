@@ -20,7 +20,8 @@ hole we want to solve for. We can think of `Δ` as the context in which
 the metavariable is created, and `Γ` as the context in which a solution is being
 attempted.
 
-For a solution to exist, it suffices for this problem to fall within the 'pattern fragment'. This means we must have the following additional conditions:
+For a solution to exist, some additional conditions must hold, the first of which restricts the problem to the 'pattern fragment'.
+These are:
 
 1. `σ` is a linear renaming: it consists only of distinct variables in
   `Γ`. In other words, it is a `σ : LinRen Γ Δ ⊆ Ren Γ Δ ⊆ Sub Γ Δ`. We can
@@ -32,7 +33,8 @@ For a solution to exist, it suffices for this problem to fall within the 'patter
 2. `t` only contains variables from `σ`. This means that `t[σ⁻¹]` is defined.
 3. `t` does not contain `?m`.
 
-If these conditions are met, then we can peform the following operation on the
+If condition 1 is met, then if a solution exists, it is unique and most general.
+If conditions 2 and 3 are additionally are met, then we can peform the following operation on the
 problem:
 
 ```
@@ -45,7 +47,7 @@ problem:
 ⟹ Δ ⊢ ?m ≡ t[σ⁻¹] 
 ```
 
-The above is thus a solution for `Δ`. It is in fact the unique solution.
+The above is the unique solution for `Δ` and is most general.
 
 In a practical setting, we represent `?m[σ]` as a metavariable applied to an
 argument spine: `?m σ`. We then represent the solution as a closed iterated
