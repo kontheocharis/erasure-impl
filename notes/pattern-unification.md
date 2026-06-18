@@ -47,7 +47,7 @@ problem:
 ⟹ Δ ⊢ ?m ≡ t[σ⁻¹] 
 ```
 
-The above is the unique solution for `Δ` and is most general.
+The above is the unique solution for `?m` and is most general.
 
 In a practical setting, we represent `?m[σ]` as a metavariable applied to an
 argument spine: `?m σ`. We then represent the solution as a closed iterated
