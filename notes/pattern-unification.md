@@ -9,7 +9,7 @@ We assume basic working knowledge of CwF-style type theory.
 
 ## Review of pattern unification
 
-In standard dependent type theory, a pattern unification problem has the form:
+In standard dependent type theory, a higher-order unification problem has the form:
 
 ```
 Γ ⊢ ?m[σ] ≡ t
@@ -20,7 +20,7 @@ hole we want to solve for. We can think of `Δ` as the context in which
 the metavariable is created, and `Γ` as the context in which a solution is being
 attempted.
 
-For a solution to exist, we must have the following additional conditions:
+For a solution to exist, it suffices for this problem to fall within the 'pattern fragment'. This means we must have the following additional conditions:
 
 1. `σ` is a linear renaming: it consists only of distinct variables in
   `Γ`. In other words, it is a `σ : LinRen Γ Δ ⊆ Ren Γ Δ ⊆ Sub Γ Δ`. We can
