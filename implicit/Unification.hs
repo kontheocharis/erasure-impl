@@ -125,7 +125,7 @@ unify l t u = case (force t, force u) of
   (VU, VU) -> pure ()
   (VPi x q i a b, VPi x' q' i' a' b')
     | q == q' && i == i' -> unify l a a' >> unify (l + 1) (b $$ VVar l Zero) (b' $$ VVar l Zero)
-  (VRigid _ x sp, VRigid _ x' sp')
+  (VRigid x _ sp, VRigid x' _ sp')
     | x == x' -> unifySp l sp sp'
   (VFlex m _ sp, VFlex m' _ sp')
     | m == m' -> unifySp l sp sp'
