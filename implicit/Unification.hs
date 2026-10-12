@@ -44,12 +44,12 @@ invert :: Lvl -> Marker -> Spine -> IO PartialRenaming
 invert gamma mrk sp = do
   let go :: Spine -> IO (Lvl, IM.IntMap (Lvl, Mode))
       go [] = pure (0, mempty)
-      go (sp :> (t, _, _)) = do
+      go (sp :> (t, q, _)) = do
         (dom, ren) <- go sp
         case force t of
-          VVar (Lvl x) md ->
+          VVar (Lvl x) _ ->
             if IM.notMember x ren
-              then pure (dom + 1, IM.insert x (dom, md) ren)
+              then pure (dom + 1, IM.insert x (dom, q) ren)
               else throwIO InversionNonLinear
           _ -> throwIO InversionNonVariables
 
@@ -80,11 +80,11 @@ rename m pren v = go pren v
         | otherwise -> do
             when (mrk == Present) (encounterU pren)
             goSp pren (Meta m' mrk) sp
-      VRigid (Lvl x) md sp -> do
-        when (md == Zero) (encounterU pren) -- check up arrow validity
+      VRigid (Lvl x) _ sp ->
         case IM.lookup x (ren pren) of
           Nothing -> throwIO Escaping
           Just (x', md) -> do
+            when (md == Zero) (encounterU pren) -- check up arrow validity
             -- Substitute the variable, adjusting for any ↑/↓ differences
             goSp pren (Var (lvl2Ix (dom pren) x') md) sp
       VLam x q i t ->

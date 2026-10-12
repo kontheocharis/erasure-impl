@@ -83,12 +83,12 @@ rename m pren v = go pren v
             when (mrk == Present) (encounterU (enterD isd pren) YesUpped)
             quoteD isd <$> goSp (enterD isd pren) (Meta m' mrk) sp
       VRigid isd isu (Lvl x) sp -> do
-        when (isd == NotDowned) (encounterU pren isu) -- check up arrow validity
         case IM.lookup x (ren pren) of
           Nothing -> throwIO Escaping
           Just (x', dir) -> do
             -- Substitute the variable, adjusting for any ↑/↓ differences
             let newVarIsU = fromMaybe isu (moveIsUpped <$> dir <*> pure isu)
+            when (isd == NotDowned) (encounterU pren newVarIsU) -- check up arrow validity
             quoteD isd <$> goSp (enterD isd pren) (quoteU newVarIsU $ Var (lvl2Ix (dom pren) x')) sp
       VLam' isd x q i t ->
         quoteD isd <$> Lam x q i <$> go (enterD isd (lift pren)) (t $$ VVar (cod pren) q)

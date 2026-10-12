@@ -1,0 +1,9 @@
+let 0 Nat : U = (0 A : U) -> A -> (A -> A) -> A;
+let zero : Nat = \A z s. z;
+let succ : Nat -> Nat = \n A z s. s (n A z s);
+let 0 Id : {0 A : U} -> A -> A -> U = \{A} x y. (0 P : A -> U) -> P x -> P y;
+let refl : {0 A : U} -> {0 x : A} -> Id x x = \{A} {x} P px. px;
+
+let f : (y : Nat) -> Nat = \y. _;
+let g : (0 x : Nat) -> Id x (f x) = \x. refl;
+f
