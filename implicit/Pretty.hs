@@ -56,7 +56,7 @@ prettyTm prec = go prec
 
     go :: Int -> [Name] -> Tm -> ShowS
     go p ns = \case
-      Var (Ix x) _ -> ((ns !! x) ++)
+      Var (Ix x) -> ((ns !! x) ++)
       App t u _ Expl -> par p appp $ go appp ns t . (' ' :) . go atomp ns u
       App t u _ Impl -> par p appp $ go appp ns t . (' ' :) . bracket (go letp ns u)
       Lam (fresh ns -> x) q i t -> par p letp $ ("λ " ++) . lamBind x i . goLam (ns :> x) t

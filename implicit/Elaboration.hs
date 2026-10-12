@@ -87,9 +87,9 @@ check cxt t a = case (t, force a) of
     check (cxt {pos = pos}) t a
   (P.Lam x i t, VPi x' q' i' a b) | either (\x -> x == x' && i' == Impl) (== i') i -> do
     -- Here we must wrap the variable in ↓ if the q = ω, because of the lambda rule.
-    Lam x q' i' <$> check (bind cxt x q' a) t (b $$ VVar (lvl cxt) q')
+    Lam x q' i' <$> check (bind cxt x q' a) t (b $$ VVar (lvl cxt))
   (t, VPi x q Impl a b) -> do
-    Lam x q Impl <$> check (newBinder cxt x q a) t (b $$ VVar (lvl cxt) q)
+    Lam x q Impl <$> check (newBinder cxt x q a) t (b $$ VVar (lvl cxt))
   (P.Let x q a t u, a') -> do
     -- Types always in mode 0
     a <- checkIn cxt Zero a VU
@@ -120,10 +120,10 @@ infer cxt = \case
     let go ix (types :> (x', origin, q, a))
           | x == x' && origin == Source = case (marker cxt, q) of
               -- A variable is usable unless it is mode 0 and the context lacks #
-              (Absent, Omega) -> pure (Var ix q, a)
+              (Absent, Omega) -> pure (Var ix, a)
               (Absent, Zero) -> elabError cxt $ InsufficientMode
-              (Present, Omega) -> pure (Var ix q, a)
-              (Present, Zero) -> pure (Var ix q, a)
+              (Present, Omega) -> pure (Var ix, a)
+              (Present, Zero) -> pure (Var ix, a)
           | otherwise = go (ix + 1) types
         go ix [] =
           elabError cxt $ NameNotInScope x

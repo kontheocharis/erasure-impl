@@ -26,7 +26,7 @@ vApp :: Val -> Val -> Mode -> Icit -> Val
 vApp t ~u q i = case t of
   VLam _ _ _ t -> t $$ u
   VFlex m mrk sp -> VFlex m mrk (sp :> (u, q, i))
-  VRigid x md sp -> VRigid x md (sp :> (u, q, i))
+  VRigid x sp -> VRigid x (sp :> (u, q, i))
   _ -> error "impossible"
 
 vAppSp :: Val -> Spine -> Val
@@ -48,7 +48,7 @@ vAppBDs env ~v bds = case (env, bds) of
 
 eval :: Env -> Tm -> Val
 eval env t = case t of
-  Var x _ -> env !! unIx x
+  Var x -> env !! unIx x
   App t u q i -> vApp (eval env t) (eval env u) q i
   Lam x q i t -> VLam x q i (Closure env t)
   Pi x q i a b -> VPi x q i (eval env a) (Closure env b)
@@ -81,9 +81,9 @@ quoteSp l t = \case
 quote :: Lvl -> Val -> Tm
 quote l t = case force t of
   VFlex m mrk sp -> quoteSp l (Meta m mrk) sp
-  VRigid x md sp -> quoteSp l (Var (lvl2Ix l x) md) sp
-  VLam x q i t -> Lam x q i (quote (l + 1) (t $$ VVar l q))
-  VPi x q i a b -> Pi x q i (quote l a) (quote (l + 1) (b $$ VVar l Zero))
+  VRigid x sp -> quoteSp l (Var (lvl2Ix l x)) sp
+  VLam x q i t -> Lam x q i (quote (l + 1) (t $$ VVar l))
+  VPi x q i a b -> Pi x q i (quote l a) (quote (l + 1) (b $$ VVar l))
   VU -> U
 
 nf :: Marker -> Env -> Tm -> Tm

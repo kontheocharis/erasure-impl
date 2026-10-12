@@ -47,7 +47,7 @@ invert gamma mrk sp = do
       go (sp :> (t, q, _)) = do
         (dom, ren) <- go sp
         case force t of
-          VVar (Lvl x) _ ->
+          VVar (Lvl x) ->
             if IM.notMember x ren
               then pure (dom + 1, IM.insert x (dom, q) ren)
               else throwIO InversionNonLinear
@@ -80,18 +80,18 @@ rename m pren v = go pren v
         | otherwise -> do
             when (mrk == Present) (encounterU pren)
             goSp pren (Meta m' mrk) sp
-      VRigid (Lvl x) _ sp ->
+      VRigid (Lvl x) sp ->
         case IM.lookup x (ren pren) of
           Nothing -> throwIO Escaping
           Just (x', md) -> do
             when (md == Zero) (encounterU pren) -- check up arrow validity
             -- Substitute the variable, adjusting for any ↑/↓ differences
-            goSp pren (Var (lvl2Ix (dom pren) x') md) sp
+            goSp pren (Var (lvl2Ix (dom pren) x')) sp
       VLam x q i t ->
-        Lam x q i <$> go (lift q pren) (t $$ VVar (cod pren) q)
+        Lam x q i <$> go (lift q pren) (t $$ VVar (cod pren))
       VPi x q i a b -> do
         encounterU pren
-        (Pi x q i <$> go pren a <*> go (lift Zero pren) (b $$ VVar (cod pren) Zero))
+        (Pi x q i <$> go pren a <*> go (lift Zero pren) (b $$ VVar (cod pren)))
       VU -> do
         encounterU pren
         pure U
@@ -119,13 +119,13 @@ unifySp l sp sp' = case (sp, sp') of
 
 unify :: Lvl -> Val -> Val -> IO ()
 unify l t u = case (force t, force u) of
-  (VLam _ q _ t, VLam _ q' _ t') -> unify (l + 1) (t $$ VVar l q) (t' $$ VVar l q')
-  (t, VLam _ q i t') -> unify (l + 1) (vApp t (VVar l q) q i) (t' $$ VVar l q)
-  (VLam _ q i t, t') -> unify (l + 1) (t $$ VVar l q) (vApp t' (VVar l q) q i)
+  (VLam _ _ _ t, VLam _ _ _ t') -> unify (l + 1) (t $$ VVar l) (t' $$ VVar l)
+  (t, VLam _ q i t') -> unify (l + 1) (vApp t (VVar l) q i) (t' $$ VVar l)
+  (VLam _ q i t, t') -> unify (l + 1) (t $$ VVar l) (vApp t' (VVar l) q i)
   (VU, VU) -> pure ()
   (VPi x q i a b, VPi x' q' i' a' b')
-    | q == q' && i == i' -> unify l a a' >> unify (l + 1) (b $$ VVar l Zero) (b' $$ VVar l Zero)
-  (VRigid x _ sp, VRigid x' _ sp')
+    | q == q' && i == i' -> unify l a a' >> unify (l + 1) (b $$ VVar l) (b' $$ VVar l)
+  (VRigid x sp, VRigid x' sp')
     | x == x' -> unifySp l sp sp'
   (VFlex m _ sp, VFlex m' _ sp')
     | m == m' -> unifySp l sp sp'

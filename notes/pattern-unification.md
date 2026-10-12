@@ -150,5 +150,4 @@ condition 2 by traversing `t` and remembering when we encounter `↑`/`↓`; a
 *If mode shifts aren't part of the compiler syntax (`implicit`)*, we can instead
 look at where erased terms appear in the syntax. Every time we find an erased
 application, it counts as a usage of `↓`, and every time we find a type or a
-variable whose mode is 0, it counts as a usage of `↑`. For this, we need to
-remember variable modes in the syntax itself.
+variable whose mode is 0, it counts as a usage of `↑`.

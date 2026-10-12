@@ -24,8 +24,8 @@ extract pos t = do
   pure $ go (ExEnv 0 [] 0 []) t
   where
     extend :: ExEnv -> Mode -> ExEnv
-    extend (ExEnv n env rn real) q@Zero = ExEnv (n + 1) (VVar (Lvl n) q : env) rn (Nothing : real)
-    extend (ExEnv n env rn real) q@Omega = ExEnv (n + 1) (VVar (Lvl n) q : env) (rn + 1) (Just (Lvl rn) : real)
+    extend (ExEnv n env rn real) Zero = ExEnv (n + 1) (VVar (Lvl n) : env) rn (Nothing : real)
+    extend (ExEnv n env rn real) Omega = ExEnv (n + 1) (VVar (Lvl n) : env) (rn + 1) (Just (Lvl rn) : real)
 
     goMeta :: ExEnv -> Tm -> Code
     goMeta exenv t = case tryForce (eval (env exenv) t) of
@@ -34,7 +34,7 @@ extract pos t = do
 
     go :: ExEnv -> Tm -> Code
     go env t = case t of
-      Var (Ix x) _ -> CVar (lvl2Ix (Lvl (nRuntime env)) (fromJust $ (runtime env) !! x))
+      Var (Ix x) -> CVar (lvl2Ix (Lvl (nRuntime env)) (fromJust $ (runtime env) !! x))
       App t u Omega i -> CApp (go env t) (go env u)
       App t u Zero i -> go env t
       Lam x Omega i t -> CLam x (go (extend env Omega) t)

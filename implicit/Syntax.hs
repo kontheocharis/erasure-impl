@@ -5,7 +5,7 @@ import Common
 type Ty = Tm
 
 data Tm
-  = Var Ix Mode
+  = Var Ix
   | Lam Name Mode Icit Tm
   | App Tm Tm Mode Icit
   | U
